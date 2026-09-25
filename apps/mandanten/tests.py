@@ -140,6 +140,17 @@ class BereitstellenPipelineTests(TestCase):
                 self.assertEqual(m.status, "fehlgeschlagen")
                 self.assertIn("Fehler:", m.protokoll)
 
+    def test_bereitschaftspruefung_simuliert_den_reverse_proxy(self):
+        """Regression aus dem echten CI-Lauf: ohne Host-Header der Instanz-Domain (ALLOWED_HOSTS) und ohne
+        X-Forwarded-Proto: https (SECURE_SSL_REDIRECT) antwortet Feuerix auf 127.0.0.1 mit 400."""
+        m = MandantInstanz.objects.create(kuerzel="p", verein_name="P", domain="p.example.org", web_port=8198)
+        with patch("apps.mandanten.provisioning.urllib.request.urlopen",
+                   return_value=_fake_urlopen_context()) as mock_open:
+            provisioning.auf_bereitschaft_warten(m, timeout_sekunden=1, intervall_sekunden=0)
+        anfrage = mock_open.call_args.args[0]
+        self.assertEqual(anfrage.get_header("Host"), "p.example.org")
+        self.assertEqual(anfrage.get_header("X-forwarded-proto"), "https")
+
     def test_bereitschaftspruefung_bei_zeitueberschreitung_setzt_status_fehlgeschlagen(self):
         """Nutzt auf_bereitschaft_warten() direkt mit kurzem Timeout statt ueber bereitstellen() (Standard
         180s) - sonst wuerde der Test real so lange dauern."""

@@ -64,13 +64,13 @@ jobs:
 
       - name: Login-Seite inhaltlich pruefen
         run: |
-          antwort=$(curl -sf "http://127.0.0.1:${WEB_PORT_BASIS}/login/")
+          antwort=$(curl -sf -H "Host: localhost" -H "X-Forwarded-Proto: https" "http://127.0.0.1:${WEB_PORT_BASIS}/login/")
           echo "$antwort" | grep -qi "csrfmiddlewaretoken" || { echo "FEHLER: Login-Seite sieht nicht wie erwartet aus."; exit 1; }
           echo "OK: Login-Seite antwortet korrekt."
 
       - name: DEBUG=0 der bereitgestellten Instanz pruefen
         run: |
-          antwort=$(curl -s "http://127.0.0.1:${WEB_PORT_BASIS}/pfad-der-nicht-existiert-xyz/")
+          antwort=$(curl -s -H "Host: localhost" -H "X-Forwarded-Proto: https" "http://127.0.0.1:${WEB_PORT_BASIS}/pfad-der-nicht-existiert-xyz/")
           if echo "$antwort" | grep -qi "You're seeing this error because you have"; then
             echo "FEHLER: Die bereitgestellte Instanz laeuft mit DEBUG=True!"
             exit 1

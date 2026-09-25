@@ -159,9 +159,13 @@ def auf_bereitschaft_warten(mandant, timeout_sekunden=180, intervall_sekunden=5)
     url = f"http://127.0.0.1:{mandant.web_port}/login/"
     ablauf = time.monotonic() + timeout_sekunden
     letzter_fehler = None
+    # Simuliert den Reverse Proxy: die Instanz erlaubt nur ihre eigene Domain (ALLOWED_HOSTS) und leitet
+    # Anfragen ohne "X-Forwarded-Proto: https" auf HTTPS um (SECURE_SSL_REDIRECT) - ohne diese Header
+    # antwortet sie auf die direkte Abfrage von 127.0.0.1 mit 400 bzw. einer Weiterleitung.
+    anfrage = urllib.request.Request(url, headers={"Host": mandant.domain, "X-Forwarded-Proto": "https"})
     while time.monotonic() < ablauf:
         try:
-            with urllib.request.urlopen(url, timeout=5) as antwort:
+            with urllib.request.urlopen(anfrage, timeout=5) as antwort:
                 if antwort.status == 200:
                     mandant.protokollieren("Weboberfläche antwortet - Bereitstellung abgeschlossen.")
                     return
