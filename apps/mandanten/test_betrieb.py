@@ -118,7 +118,7 @@ class AdminAktionTests(TestCase):
             admin.bereitstellen(request, MandantInstanz.objects.all())
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
-        self.assertEqual({"bereitstellen", "pausieren", "sichern", "aktualisieren"}, set(admin.actions))
+        self.assertEqual({"bereitstellen", "pausieren", "sichern", "aktualisieren", "admin_passwort_zuruecksetzen"}, set(admin.actions))
 
 
 @override_settings(PORTAL_DOMAIN="portal.example.org", PORTAL_PORT=8000, PROXY_NUR_HTTP=False)
@@ -142,3 +142,76 @@ class PortalOberflaecheTests(TestCase):
         self.assertIn("red", html)
         self.assertIn("feuerix", html)
         self.assertEqual(admin.erreichbarkeit(_m("z", status="pausiert")), "-")
+
+
+class FortschrittUndPasswortTests(TestCase):
+    def _admin_request(self):
+        request = RequestFactory().post("/")
+        request.user = get_user_model().objects.create_superuser("adm", "a@example.org", "x")
+        request._messages = MagicMock()
+        return request
+
+    def test_bereitstellen_meldet_fortschritt_bis_100(self):
+        from . import provisioning
+        m = _m(status="neu", web_port=None)
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp), \
+             patch("apps.mandanten.provisioning.stack_hochfahren"), \
+             patch("apps.mandanten.provisioning.auf_bereitschaft_warten"), \
+             patch("apps.mandanten.provisioning._proxy_nachziehen"):
+            provisioning.bereitstellen(m)
+        m.refresh_from_db()
+        self.assertEqual((m.status, m.fortschritt, m.schritt), ("laeuft", 100, "Fertig"))
+
+    def test_fehlschlag_merkt_den_schritt(self):
+        from . import provisioning
+        m = _m(status="neu", web_port=None)
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp), \
+             patch("apps.mandanten.provisioning.stack_hochfahren", side_effect=BereitstellungsFehler("x")):
+            with self.assertRaises(BereitstellungsFehler):
+                provisioning.bereitstellen(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "fehlgeschlagen")
+        self.assertIn("Fehlgeschlagen bei: Feuerix bauen", m.schritt)
+
+    def test_status_json_endpunkt(self):
+        m = _m(status="wird_bereitgestellt", fortschritt=40, schritt="Test")
+        self.client.force_login(get_user_model().objects.create_superuser("adm", "a@example.org", "x"))
+        antwort = self.client.get(f"/admin/mandanten/mandantinstanz/{m.pk}/status/")
+        self.assertEqual(antwort.json()["fortschritt"], 40)
+        self.assertEqual(antwort.json()["status"], "wird_bereitgestellt")
+
+    def test_status_json_nur_fuer_angemeldete(self):
+        m = _m()
+        self.assertEqual(self.client.get(f"/admin/mandanten/mandantinstanz/{m.pk}/status/").status_code, 302)
+
+    def test_liste_und_detailseite_rendern_mit_balken(self):
+        m = _m(status="wird_bereitgestellt", fortschritt=40, schritt="Test")
+        self.client.force_login(get_user_model().objects.create_superuser("adm", "a@example.org", "x"))
+        self.assertContains(self.client.get("/admin/mandanten/mandantinstanz/"), "pv-balken")
+        self.assertContains(self.client.get(f"/admin/mandanten/mandantinstanz/{m.pk}/change/"), "data-url")
+
+    def test_passwort_reset_setzt_in_instanz_und_speichert_neu(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _m(admin_benutzername="chef", admin_email="c@example.org", admin_passwort="alt")
+            _feuerix(tmp, m)
+            with patch("apps.mandanten.basis.subprocess.run",
+                       return_value=MagicMock(returncode=0, stdout="", stderr="")) as run:
+                neu = betrieb.admin_passwort_zuruecksetzen(m)
+            self.assertNotIn(neu, " ".join(run.call_args.args[0]))   # nicht in der Prozessliste
+            self.assertIn(neu, run.call_args.kwargs["input"])
+            self.assertIn("'chef'", run.call_args.kwargs["input"])
+            m.refresh_from_db()
+            self.assertEqual(m.admin_passwort, neu)
+            self.assertNotEqual(neu, "alt")
+
+    def test_passwort_reset_nur_fuer_laufende(self):
+        with self.assertRaises(BereitstellungsFehler):
+            betrieb.admin_passwort_zuruecksetzen(_m(status="pausiert"))
+
+    def test_admin_aktion_zeigt_passwort_einmalig(self):
+        m = _m()
+        admin = site._registry[MandantInstanz]
+        request = self._admin_request()
+        with patch("apps.mandanten.betrieb.admin_passwort_zuruecksetzen", return_value="NEUESPW"):
+            admin.admin_passwort_zuruecksetzen(request, MandantInstanz.objects.all())
+        self.assertIn("NEUESPW", request._messages.add.call_args.args[1])

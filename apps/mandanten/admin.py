@@ -1,20 +1,52 @@
 from django.contrib import admin, messages
-
+from django.http import JsonResponse
+from django.urls import path, reverse
 from django.utils.html import format_html
 
 from . import betrieb, tasks
+from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
 
 @admin.register(MandantInstanz)
 class MandantInstanzAdmin(admin.ModelAdmin):
-    list_display = ("kuerzel", "verein_name", "domain", "status", "erreichbarkeit", "feuerix_version",
-                    "erstellt_am")
+    list_display = ("kuerzel", "verein_name", "domain", "status", "fortschrittsbalken", "erreichbarkeit",
+                    "feuerix_version", "erstellt_am")
     list_filter = ("status",)
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
-    readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "protokoll",
-                       "feuerix_version", "erstellt_am", "aktualisiert_am")
-    actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren"]
+    readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
+                       "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
+    actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren", "admin_passwort_zuruecksetzen"]
+
+    class Media:
+        css = {"all": ("mandanten/fortschritt.css",)}
+        js = ("mandanten/fortschritt.js",)
+
+    def get_urls(self):
+        eigene = [path("<int:pk>/status/", self.admin_site.admin_view(self.status_json), name="mandanten_status")]
+        return eigene + super().get_urls()
+
+    def status_json(self, request, pk):
+        if not self.has_view_permission(request):
+            return JsonResponse({}, status=403)
+        m = MandantInstanz.objects.filter(pk=pk).first()
+        if m is None:
+            return JsonResponse({}, status=404)
+        return JsonResponse({"status": m.status, "status_text": m.get_status_display(),
+                             "fortschritt": m.fortschritt, "schritt": m.schritt})
+
+    @admin.display(description="Fortschritt")
+    def fortschrittsbalken(self, obj):
+        if not obj.pk or obj.status in ("neu", "geloescht"):
+            return "-"
+        url = reverse("admin:mandanten_status", args=[obj.pk])
+        text = f"{obj.get_status_display()}" + (f" - {obj.schritt}" if obj.schritt else "") \
+            + f" ({obj.fortschritt} %)"
+        laeuft = obj.status == "wird_bereitgestellt"
+        return format_html(
+            '<div class="pv-fortschritt" {}><div class="pv-balken"><div style="width:{}%"></div></div>'
+            '<span class="pv-text">{}</span></div>',
+            format_html('data-url="{}"', url) if laeuft else "", obj.fortschritt, text)
 
     @admin.display(description="Erreichbarkeit (live)")
     def erreichbarkeit(self, obj):
@@ -30,17 +62,21 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                          "paperless_domain", "openslides_domain"]
         if obj is None:
             return pflichtfelder
-        return pflichtfelder + ["web_port", "paperless_port", "openslides_port", "status", "protokoll",
-                                "feuerix_version", "erstellt_am", "aktualisiert_am"]
+        return pflichtfelder + ["web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
+                                "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am"]
 
     def _starten(self, request, queryset, task, text):
         for m in queryset:
             task.delay(m.pk)
-        self.message_user(request, f"{text} für {queryset.count()} Instanz(en) gestartet - Ergebnis im "
-                                   "Protokoll der Instanz.", messages.INFO)
+        self.message_user(request, f"{text} für {queryset.count()} Instanz(en) gestartet - Fortschritt siehe "
+                                   "Spalte „Fortschritt“ und Protokoll der Instanz.", messages.INFO)
 
     @admin.action(description="Bereitstellen / erneut bereitstellen")
     def bereitstellen(self, request, queryset):
+        for m in queryset:
+            # sofort sichtbar machen, damit die Oberflaeche den Fortschritt live anzeigen kann
+            m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
+            m.save(update_fields=["status", "fortschritt", "schritt"])
         self._starten(request, queryset, tasks.mandant_bereitstellen_task, "Bereitstellung")
 
     @admin.action(description="Pausieren (Daten bleiben erhalten)")
@@ -54,3 +90,15 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     @admin.action(description="Auf aktuellen Feuerix-Code aktualisieren")
     def aktualisieren(self, request, queryset):
         self._starten(request, queryset, tasks.mandant_update_task, "Update")
+
+    @admin.action(description="Admin-Passwort der Instanz zurücksetzen")
+    def admin_passwort_zuruecksetzen(self, request, queryset):
+        for m in queryset:
+            try:
+                neu = betrieb.admin_passwort_zuruecksetzen(m)
+            except BereitstellungsFehler as e:
+                self.message_user(request, f"{m.kuerzel}: {e}", messages.ERROR)
+                continue
+            self.message_user(
+                request, f"{m.kuerzel}: neues Passwort für Benutzer „{m.admin_benutzername}“: {neu} - "
+                         "wird nur jetzt angezeigt, bitte sicher weitergeben.", messages.WARNING)

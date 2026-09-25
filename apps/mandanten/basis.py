@@ -59,3 +59,10 @@ def yaml_pfad(pfad):
 
 def url_schema():
     return "http" if settings.PROXY_NUR_HTTP else "https"
+
+
+def fortschritt(mandant, prozent, schritt):
+    """Meldet den Bereitstellungsfortschritt (fuer den Fortschrittsbalken im Admin)."""
+    mandant.fortschritt = prozent
+    mandant.schritt = schritt
+    mandant.save(update_fields=["fortschritt", "schritt"])

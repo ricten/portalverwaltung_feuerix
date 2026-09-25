@@ -61,6 +61,8 @@ class MandantInstanz(models.Model):
     admin_passwort = VerschluesseltesTextField("Admin-Passwort", blank=True, editable=False)
 
     status = models.CharField("Status", max_length=20, choices=STATUS, default="neu")
+    fortschritt = models.PositiveSmallIntegerField("Fortschritt (%)", default=0, editable=False)
+    schritt = models.CharField("Aktueller Schritt", max_length=200, blank=True, editable=False)
     protokoll = models.TextField("Bereitstellungs-Protokoll", blank=True, editable=False)
     feuerix_version = models.CharField("Bereitgestellte Feuerix-Version", max_length=20, blank=True,
                                        editable=False)

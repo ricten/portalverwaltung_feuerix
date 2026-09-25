@@ -194,9 +194,12 @@ def zusatzdienste_bereitstellen(mandant):
     """Paperless/OpenSlides je nach gesetzter Domain - erst NACH der laufenden Feuerix-Instanz, da die
     Anbindung dort eingetragen wird."""
     if paperless.aktiv(mandant):
+        basis.fortschritt(mandant, 50, "Paperless: Dienste starten")
         paperless.env_erzeugen(mandant)
         paperless.hochfahren(mandant)
+        basis.fortschritt(mandant, 60, "Paperless: warten, bis es antwortet")
         paperless.auf_bereitschaft_warten(mandant)
+        basis.fortschritt(mandant, 70, "Paperless: Anbindung in Feuerix eintragen")
         paperless.in_feuerix_eintragen(mandant, paperless.token_holen(mandant), _compose_basis(mandant))
     if openslides.aktiv(mandant):
         openslides.bereitstellen(mandant, _compose_basis(mandant))
@@ -226,18 +229,25 @@ def bereitstellen(mandant):
     mandant.status = "wird_bereitgestellt"
     mandant.save(update_fields=["status"])
     try:
+        basis.fortschritt(mandant, 5, "Konfiguration (.env) erzeugen")
         env_erzeugen(mandant)
+        basis.fortschritt(mandant, 10, "Feuerix bauen und starten (kann einige Minuten dauern)")
         stack_hochfahren(mandant)
+        basis.fortschritt(mandant, 35, "Feuerix: warten auf Migration und Ersteinrichtung")
         auf_bereitschaft_warten(mandant)
+        basis.fortschritt(mandant, 45, "Zusatzdienste")
         zusatzdienste_bereitstellen(mandant)
         # Erst jetzt "laeuft": der Proxy nimmt nur Instanzen mit diesem Status auf.
+        basis.fortschritt(mandant, 97, "Reverse Proxy eintragen")
         mandant.status = "laeuft"
         mandant.feuerix_version = feuerix_version()
         mandant.save(update_fields=["status", "feuerix_version"])
         _proxy_nachziehen(mandant)
+        basis.fortschritt(mandant, 100, "Fertig")
     except BereitstellungsFehler as e:
         mandant.status = "fehlgeschlagen"
-        mandant.save(update_fields=["status"])
+        mandant.schritt = f"Fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.save(update_fields=["status", "schritt"])
         mandant.protokollieren(f"Fehler: {e}")
         raise
 

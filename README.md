@@ -62,7 +62,9 @@ legt den Administrator an. OpenSlides und Paperless wählst du je Verein über d
 
 Die **Weboberfläche** ist das Django-Admin (`/admin/`, bei gesetzter `PORTAL_DOMAIN` automatisch über Caddy mit
 HTTPS): Die Instanzliste zeigt Status, Version und eine **Live-Erreichbarkeit je Dienst** (grün/rot), dazu
-Aktionen zum Bereitstellen, Pausieren, Sichern und Aktualisieren und das Protokoll je Instanz.
+Aktionen zum Bereitstellen, Pausieren, Sichern und Aktualisieren, das Protokoll je Instanz, einen
+**Fortschrittsbalken mit aktuellem Schritt** während der Bereitstellung (aktualisiert sich ohne Neuladen) und die
+Aktion **„Admin-Passwort der Instanz zurücksetzen“** (neues Passwort wird einmalig angezeigt).
 
 ## Ablauf
 

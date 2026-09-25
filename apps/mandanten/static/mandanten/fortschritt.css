@@ -1,0 +1,3 @@
+.pv-balken { background: #ddd; border-radius: 4px; height: 12px; width: 220px; overflow: hidden; }
+.pv-balken > div { background: #2e7d32; height: 100%; transition: width .6s; }
+.pv-text { font-size: 12px; display: block; margin-top: 2px; }

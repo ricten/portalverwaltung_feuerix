@@ -80,3 +80,29 @@ def alle_aktualisieren(pause_sekunden=10, git_pull=False):
             m.protokollieren(f"Update fehlgeschlagen: {e}")
         time.sleep(pause_sekunden)
     return ok, fehler
+
+
+def admin_passwort_zuruecksetzen(mandant):
+    """Setzt das Passwort des Instanz-Administrators in der laufenden Feuerix-Instanz neu (legt den Benutzer bei
+    Bedarf an) und speichert es verschluesselt. -> das neue Passwort (wird nur einmal angezeigt)."""
+    if mandant.status != "laeuft":
+        raise BereitstellungsFehler(f"Passwort-Reset nur fuer laufende Instanzen moeglich (Status: {mandant.status}).")
+    neu = basis.zufallswert(16)
+    skript = "\n".join([
+        "from django.contrib.auth import get_user_model",
+        "U = get_user_model()",
+        f"u = U.objects.filter(username={mandant.admin_benutzername!r}).first()",
+        "if u is None:",
+        f"    u = U.objects.create_superuser({mandant.admin_benutzername!r}, {mandant.admin_email!r}, {neu!r})",
+        "else:",
+        f"    u.set_password({neu!r}); u.is_active = True; u.save()",
+        ""])
+    befehl = provisioning._compose_basis(mandant) + [
+        "exec", "-T", "web", "python", "-c",
+        "import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); "
+        "django.setup(); exec(open(0).read())"]
+    basis.docker(befehl, "Admin-Passwort zuruecksetzen", timeout=120, eingabe=skript)
+    mandant.admin_passwort = neu
+    mandant.save(update_fields=["admin_passwort"])
+    mandant.protokollieren("Passwort des Instanz-Administrators zurückgesetzt.")
+    return neu

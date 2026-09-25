@@ -162,10 +162,15 @@ def in_feuerix_eintragen(mandant, feuerix_compose_basis):
 
 
 def bereitstellen(mandant, feuerix_compose_basis):
+    basis.fortschritt(mandant, 75, "OpenSlides: Stack einrichten")
     osmanage = einrichten(mandant)
+    basis.fortschritt(mandant, 80, "OpenSlides: Images laden und starten")
     hochfahren(mandant)
+    basis.fortschritt(mandant, 88, "OpenSlides: Startdaten anlegen")
     startdaten_anlegen(mandant, osmanage)
+    basis.fortschritt(mandant, 93, "OpenSlides: warten, bis es antwortet")
     auf_bereitschaft_warten(mandant)
+    basis.fortschritt(mandant, 96, "OpenSlides: Anbindung in Feuerix eintragen")
     in_feuerix_eintragen(mandant, feuerix_compose_basis)
 
 
