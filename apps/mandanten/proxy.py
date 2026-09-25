@@ -30,6 +30,12 @@ def caddyfile_erzeugen(mandanten):
     if settings.PROXY_NUR_HTTP:
         zeilen.append("\tauto_https off")
     zeilen.append("}")
+    if settings.PORTAL_DOMAIN:
+        try:
+            gueltige_domain(settings.PORTAL_DOMAIN)
+        except ValidationError:
+            raise ProxyFehler(f"Ungültige PORTAL_DOMAIN: {settings.PORTAL_DOMAIN!r}")
+        zeilen += _site(settings.PORTAL_DOMAIN, settings.PORTAL_PORT, [], gzip=not settings.PROXY_NUR_HTTP)
     for m in sorted(mandanten, key=lambda x: x.kuerzel):
         for domain in (m.domain, m.paperless_domain, m.openslides_domain):
             if domain:

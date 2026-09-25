@@ -26,27 +26,29 @@ def backup(mandant):
     return ziel
 
 
-def _antwortet(port, host, pfad, https_header=False):
+def _antwortet(port, host, pfad, https_header=False, timeout=5):
     kopf = {"Host": host}
     if https_header:
         kopf["X-Forwarded-Proto"] = "https"
     anfrage = urllib.request.Request(f"http://127.0.0.1:{port}{pfad}", headers=kopf)
     try:
-        with urllib.request.urlopen(anfrage, timeout=5) as antwort:
+        with urllib.request.urlopen(anfrage, timeout=timeout) as antwort:
             return antwort.status == 200
     except (urllib.error.URLError, ConnectionError, TimeoutError):
         return False
 
 
-def gesundheit(mandant):
+def gesundheit(mandant, timeout=5):
     """-> Dict {Dienst: True/False} fuer alle konfigurierten Dienste der Instanz."""
     ergebnis = {}
     if mandant.web_port:
-        ergebnis["feuerix"] = _antwortet(mandant.web_port, mandant.domain, "/login/", https_header=True)
+        ergebnis["feuerix"] = _antwortet(mandant.web_port, mandant.domain, "/login/", https_header=True,
+                                       timeout=timeout)
     if mandant.paperless_domain and mandant.paperless_port:
-        ergebnis["paperless"] = _antwortet(mandant.paperless_port, mandant.paperless_domain, "/accounts/login/")
+        ergebnis["paperless"] = _antwortet(mandant.paperless_port, mandant.paperless_domain, "/accounts/login/",
+                                          timeout=timeout)
     if mandant.openslides_domain and mandant.openslides_port:
-        ergebnis["openslides"] = _antwortet(mandant.openslides_port, mandant.openslides_domain, "/")
+        ergebnis["openslides"] = _antwortet(mandant.openslides_port, mandant.openslides_domain, "/", timeout=timeout)
     return ergebnis
 
 

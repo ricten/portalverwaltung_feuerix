@@ -53,6 +53,17 @@ Aktuell automatisiert:
 **Bewusst nicht enthalten**: Abrechnung/Tarife, Self-Service-Anmeldung für Vereine, automatische
 Zertifikats-/Backup-Rotation über 14 Sicherungen hinaus (das übernimmt Feuerix' `backup.sh` je Instanz).
 
+## Installation (interaktiv) und Weboberfläche
+
+Auf einem Linux-Server mit Docker: `./install.sh`. Der Assistent fragt, welche Komponenten installiert werden
+sollen (PostgreSQL + Redis als Container, Caddy als Reverse Proxy, Celery-Worker und Weboberfläche als
+systemd-Dienste, eigene Domain der Portalverwaltung), erzeugt `.env` mit Zufallsgeheimnissen, migriert und
+legt den Administrator an. OpenSlides und Paperless wählst du je Verein über die Domain-Felder.
+
+Die **Weboberfläche** ist das Django-Admin (`/admin/`, bei gesetzter `PORTAL_DOMAIN` automatisch über Caddy mit
+HTTPS): Die Instanzliste zeigt Status, Version und eine **Live-Erreichbarkeit je Dienst** (grün/rot), dazu
+Aktionen zum Bereitstellen, Pausieren, Sichern und Aktualisieren und das Protokoll je Instanz.
+
 ## Ablauf
 
 ```bash

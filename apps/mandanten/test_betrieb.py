@@ -119,3 +119,26 @@ class AdminAktionTests(TestCase):
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
         self.assertEqual({"bereitstellen", "pausieren", "sichern", "aktualisieren"}, set(admin.actions))
+
+
+@override_settings(PORTAL_DOMAIN="portal.example.org", PORTAL_PORT=8000, PROXY_NUR_HTTP=False)
+class PortalOberflaecheTests(TestCase):
+    def test_portal_domain_kommt_in_den_reverse_proxy(self):
+        from . import proxy
+        text = proxy.caddyfile_erzeugen([])
+        self.assertIn("portal.example.org {", text)
+        self.assertIn("reverse_proxy 127.0.0.1:8000", text)
+
+    @override_settings(PORTAL_DOMAIN="x.org {\n respond\n}")
+    def test_ungueltige_portal_domain_wird_abgelehnt(self):
+        from . import proxy
+        with self.assertRaises(proxy.ProxyFehler):
+            proxy.caddyfile_erzeugen([])
+
+    def test_admin_spalte_zeigt_live_status(self):
+        admin = site._registry[MandantInstanz]
+        with patch("apps.mandanten.betrieb._antwortet", return_value=False):
+            html = str(admin.erreichbarkeit(_m()))
+        self.assertIn("red", html)
+        self.assertIn("feuerix", html)
+        self.assertEqual(admin.erreichbarkeit(_m("z", status="pausiert")), "-")

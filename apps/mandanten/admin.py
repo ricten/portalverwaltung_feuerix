@@ -1,17 +1,29 @@
 from django.contrib import admin, messages
 
-from . import tasks
+from django.utils.html import format_html
+
+from . import betrieb, tasks
 from .models import MandantInstanz
 
 
 @admin.register(MandantInstanz)
 class MandantInstanzAdmin(admin.ModelAdmin):
-    list_display = ("kuerzel", "verein_name", "domain", "status", "web_port", "erstellt_am")
+    list_display = ("kuerzel", "verein_name", "domain", "status", "erreichbarkeit", "feuerix_version",
+                    "erstellt_am")
     list_filter = ("status",)
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "protokoll",
                        "feuerix_version", "erstellt_am", "aktualisiert_am")
     actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren"]
+
+    @admin.display(description="Erreichbarkeit (live)")
+    def erreichbarkeit(self, obj):
+        if obj.status != "laeuft":
+            return "-"
+        dienste = betrieb.gesundheit(obj, timeout=2)
+        return format_html(" ".join(
+            '<span style="color:{}">{} {}</span>' for _ in dienste
+        ), *[x for d, ok in dienste.items() for x in ("green" if ok else "red", "●" if ok else "✖", d)])
 
     def get_fields(self, request, obj=None):
         pflichtfelder = ["kuerzel", "verein_name", "domain", "admin_benutzername", "admin_email",

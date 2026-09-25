@@ -28,6 +28,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -113,6 +114,9 @@ OPENSLIDES_PORT_BASIS = int(os.environ.get("OPENSLIDES_PORT_BASIS", "9100"))
 # Hand pflegen. Die Admin-API gibt vollen Zugriff auf Caddy - deshalb nur auf localhost erreichbar lassen.
 CADDY_ADMIN_URL = os.environ.get("CADDY_ADMIN_URL", "")
 CADDY_ACME_EMAIL = os.environ.get("CADDY_ACME_EMAIL", "")
+# Eigene Domain der Portalverwaltung (Weboberflaeche /admin/) - wird mit in den Reverse Proxy eingetragen.
+PORTAL_DOMAIN = os.environ.get("PORTAL_DOMAIN", "")
+PORTAL_PORT = int(os.environ.get("PORTAL_PORT", "8000"))
 # Nur fuer Tests/lokal: reines HTTP ohne Zertifikate (siehe proxy.py).
 PROXY_NUR_HTTP = _bool("PROXY_NUR_HTTP")
 
