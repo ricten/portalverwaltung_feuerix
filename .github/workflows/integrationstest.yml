@@ -168,3 +168,120 @@ jobs:
             -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" \
             -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" down -v || true
           docker rm -f caddy || true
+
+  openslides:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings_sqlite
+      FEUERIX_REPO_PFAD: ${{ github.workspace }}/feuerix
+      INSTANZEN_VERZEICHNIS: ${{ github.workspace }}/instanzen
+      WEB_PORT_BASIS: "8100"
+      OPENSLIDES_PORT_BASIS: "9100"
+      KUERZEL: ci-os
+      DOMAIN: ci-os.example.test
+      OPENSLIDES_DOMAIN: ci-os-versammlung.example.test
+      CADDY_ADMIN_URL: http://127.0.0.1:2019
+      PROXY_NUR_HTTP: "1"
+
+    steps:
+      - name: Portalverwaltung auschecken
+        uses: actions/checkout@v4
+        with:
+          path: portalverwaltung
+
+      - name: Feuerix auschecken
+        uses: actions/checkout@v4
+        with:
+          repository: ricten/Feuerix
+          ref: main
+          path: feuerix
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhängigkeiten installieren und Datenbank einrichten
+        working-directory: portalverwaltung
+        run: |
+          pip install -r requirements.txt
+          python manage.py migrate
+
+      - name: Test-Mandant mit OpenSlides anlegen
+        working-directory: portalverwaltung
+        run: |
+          python manage.py shell -c "
+          from apps.mandanten.models import MandantInstanz
+          MandantInstanz.objects.get_or_create(kuerzel='${{ env.KUERZEL }}', defaults={
+              'verein_name': 'CI-OS e.V.', 'domain': '${{ env.DOMAIN }}',
+              'openslides_domain': '${{ env.OPENSLIDES_DOMAIN }}', 'admin_email': 'ci@example.org'})
+          "
+
+      - name: Caddy (Reverse Proxy) starten
+        run: |
+          docker run -d --name caddy --network host caddy:2
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:2019/config/ >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:2019/config/ >/dev/null || { echo "FEHLER: Caddy-Admin-API nicht erreichbar"; exit 1; }
+
+      - name: Instanz mit OpenSlides bereitstellen
+        working-directory: portalverwaltung
+        run: python manage.py mandant_bereitstellen "${{ env.KUERZEL }}"
+
+      - name: OpenSlides über den Reverse Proxy pruefen
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${OPENSLIDES_DOMAIN}" "http://127.0.0.1:80/")
+          [ "$code" = "200" ] || { echo "FEHLER: OpenSlides antwortet ueber Caddy mit HTTP $code"; exit 1; }
+          echo "OK: OpenSlides ist ueber den Reverse Proxy erreichbar."
+
+      - name: Anbindung in Feuerix hinterlegt und Superadmin-Passwort gespeichert
+        working-directory: portalverwaltung
+        run: |
+          python manage.py shell -c "
+          from apps.mandanten.models import MandantInstanz
+          m = MandantInstanz.objects.get(kuerzel='${{ env.KUERZEL }}')
+          assert m.openslides_initialisiert and m.openslides_superadmin_passwort
+          print('OK: Startdaten angelegt, Passwort gespeichert.')
+          "
+          docker compose -p "mandant-${KUERZEL}" \
+            --env-file "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/.env" \
+            -f "${FEUERIX_REPO_PFAD}/docker-compose.yml" \
+            -f "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/compose.mandant.yml" \
+            exec -T web python manage.py shell -c "
+          from apps.openslides.models import OpenSlidesVerbindung
+          v = OpenSlidesVerbindung.objects.get()
+          assert v.aktiv and v.url == 'http://${OPENSLIDES_DOMAIN}' and v.passwort and v.benutzername == 'superadmin'
+          print('OK: OpenSlidesVerbindung in Feuerix eingetragen:', v.url)
+          "
+
+      - name: Erneute Bereitstellung ist idempotent
+        working-directory: portalverwaltung
+        run: |
+          vorher=$(sha256sum "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/openslides/secrets/superadmin" | cut -d' ' -f1)
+          python manage.py mandant_bereitstellen "${KUERZEL}"
+          nachher=$(sha256sum "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/openslides/secrets/superadmin" | cut -d' ' -f1)
+          [ "$vorher" = "$nachher" ] || { echo "FEHLER: Superadmin-Passwort hat sich geaendert"; exit 1; }
+          echo "OK: idempotent."
+
+      - name: Abbauen (inkl. Daten) und Aufraeumen pruefen
+        working-directory: portalverwaltung
+        run: |
+          python manage.py mandant_abbauen "${KUERZEL}" --daten-loeschen
+          for p in "mandant-${KUERZEL}" "mandant-${KUERZEL}-openslides"; do
+            [ -z "$(docker ps -aq --filter label=com.docker.compose.project=$p)" ] || { echo "FEHLER: Container uebrig ($p)"; exit 1; }
+            [ -z "$(docker volume ls -q --filter label=com.docker.compose.project=$p)" ] || { echo "FEHLER: Volumes uebrig ($p)"; exit 1; }
+          done
+          echo "OK: alles abgebaut."
+
+      - name: Logs bei Fehlschlag ausgeben
+        if: failure()
+        run: |
+          (cd "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/openslides" && COMPOSE_PROJECT_NAME="mandant-${KUERZEL}-openslides" docker compose ps -a && COMPOSE_PROJECT_NAME="mandant-${KUERZEL}-openslides" docker compose logs --tail=60) || true
+          echo "--- caddy ---"; docker logs caddy --tail=60 || true
+
+      - name: Aufraeumen (immer)
+        if: always()
+        run: docker rm -f caddy || true

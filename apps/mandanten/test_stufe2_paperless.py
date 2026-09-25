@@ -14,7 +14,7 @@ from .models import MandantInstanz
 
 
 def _verz(tmp):
-    return override_settings(INSTANZEN_VERZEICHNIS=tmp, FEUERIX_REPO_PFAD=tmp)
+    return override_settings(INSTANZEN_VERZEICHNIS=tmp, FEUERIX_REPO_PFAD=tmp, PROXY_NUR_HTTP=False)
 
 
 def _feuerix_checkout(tmp):
@@ -105,6 +105,7 @@ class PaperlessComposeTests(TestCase):
             run.assert_not_called()
 
 
+@override_settings(PROXY_NUR_HTTP=False)
 class PaperlessApiTests(TestCase):
     def test_token_wird_mit_host_header_und_zugangsdaten_geholt(self):
         m = _mandant(paperless_port=10100, paperless_admin_passwort="geheim")
@@ -216,6 +217,7 @@ class EingabenTests(TestCase):
             provisioning.eingaben_pruefen(m)
 
 
+@override_settings(PROXY_NUR_HTTP=False)
 class ProxyZusatzdienstTests(TestCase):
     def _m(self, **kw):
         return _mandant(status="laeuft", web_port=8100, paperless_port=10100, openslides_port=9100,

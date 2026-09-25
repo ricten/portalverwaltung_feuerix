@@ -1,4 +1,5 @@
 """Gemeinsame Bausteine fuer Bereitstellung von Feuerix und Zusatzdiensten (Paperless, OpenSlides)."""
+import os
 import secrets
 import string
 import subprocess
@@ -35,12 +36,13 @@ def naechster_freier_port(feld, basis):
     return port
 
 
-def docker(befehl, was, timeout=900, cwd=None, eingabe=None):
+def docker(befehl, was, timeout=900, cwd=None, eingabe=None, env=None):
     """Fuehrt einen docker-Befehl aus. Jede Art von Scheitern (Exitcode, Timeout, docker fehlt) wird zu
     einem BereitstellungsFehler, damit der Status der Instanz nie in "wird bereitgestellt" haengen bleibt."""
     try:
         ergebnis = subprocess.run(befehl, cwd=cwd or settings.FEUERIX_REPO_PFAD, capture_output=True, text=True,
-                                  timeout=timeout, input=eingabe)
+                                  timeout=timeout, input=eingabe,
+                                  env={**os.environ, **env} if env else None)
     except subprocess.TimeoutExpired:
         raise BereitstellungsFehler(f"{was}: Zeitüberschreitung nach {timeout}s.")
     except OSError as e:
