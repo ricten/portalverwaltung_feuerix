@@ -86,10 +86,12 @@ def _compose_basis(mandant):
     # Mandanten dasselbe Verzeichnis. Compose fuehrt Volumes ueber den Ziel-Pfad zusammen, der spaetere Eintrag
     # gewinnt.
     override = verz / "compose.mandant.yml"
+    export_pfad = (verz / "export").resolve().as_posix()
+    consume_pfad = (verz / "consume").resolve().as_posix()
     override.write_text(
         "services:\n  webserver:\n    volumes:\n"
-        f"      - {basis.yaml_pfad(verz / 'export')}:/usr/src/paperless/export\n"
-        f"      - {basis.yaml_pfad(verz / 'consume')}:/usr/src/paperless/consume\n", encoding="utf-8")
+        f'      - "{export_pfad}:/usr/src/paperless/export"\n'
+        f'      - "{consume_pfad}:/usr/src/paperless/consume"\n', encoding="utf-8")
     return ["docker", "compose", "-p", projektname(mandant), "--env-file", str(env_pfad),
             "-f", str(compose_datei), "-f", str(override)], compose_datei.parent
 
