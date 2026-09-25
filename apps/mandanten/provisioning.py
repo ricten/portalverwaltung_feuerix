@@ -115,6 +115,22 @@ def env_erzeugen(mandant):
     return env_pfad
 
 
+def compose_override_schreiben(mandant, env_pfad):
+    """Feuerix' docker-compose.yml hat `env_file: .env` bei web/worker - das loest relativ zum Compose-File
+    auf (also im Feuerix-Checkout), NICHT ueber --env-file (das betrifft nur die Variablen-Interpolation).
+    Diese kleine Override-Datei biegt env_file je Mandant auf dessen eigene .env um (`!override` ersetzt die
+    Liste statt sie zu ergaenzen; erfordert Docker Compose >= 2.24)."""
+    pfad = instanz_verzeichnis(mandant) / "compose.mandant.yml"
+    env = env_pfad.resolve().as_posix()
+    pfad.write_text(
+        "services:\n"
+        "  web:\n"
+        f"    env_file: !override\n      - \"{env}\"\n"
+        "  worker:\n"
+        f"    env_file: !override\n      - \"{env}\"\n", encoding="utf-8")
+    return pfad
+
+
 def stack_hochfahren(mandant):
     """Startet den Feuerix-Docker-Compose-Stack fuer diesen Mandanten unter einem eigenen Projektnamen -
     nutzt die docker-compose.yml aus dem konfigurierten Feuerix-Quellcode-Checkout direkt (kein Kopieren),
@@ -126,8 +142,9 @@ def stack_hochfahren(mandant):
     if not compose_datei.exists():
         raise BereitstellungsFehler(f"docker-compose.yml nicht gefunden unter {compose_datei} - "
                                     "FEUERIX_REPO_PFAD prüfen.")
+    override_datei = compose_override_schreiben(mandant, env_pfad)
     befehl = ["docker", "compose", "-p", mandant.docker_projekt, "--env-file", str(env_pfad),
-             "-f", str(compose_datei), "up", "-d", "--build"]
+             "-f", str(compose_datei), "-f", str(override_datei), "up", "-d", "--build"]
     ergebnis = subprocess.run(befehl, cwd=settings.FEUERIX_REPO_PFAD, capture_output=True, text=True,
                               timeout=900)
     if ergebnis.returncode != 0:

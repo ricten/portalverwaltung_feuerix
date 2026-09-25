@@ -86,6 +86,12 @@ class StackHochfahrenTests(TestCase):
                 self.assertIn("mandant-y", befehl)
                 self.assertIn("up", befehl)
                 self.assertIn("--build", befehl)
+                # env_file von web/worker muss auf die Mandanten-.env umgebogen sein, sonst sucht Compose
+                # die .env im Feuerix-Checkout (Regression aus dem ersten echten CI-Lauf)
+                override = (Path(tmp) / "y" / "compose.mandant.yml").read_text(encoding="utf-8")
+                self.assertIn("!override", override)
+                self.assertIn((Path(tmp) / "y" / ".env").resolve().as_posix(), override)
+                self.assertIn(str(Path(tmp) / "y" / "compose.mandant.yml"), befehl)
 
     def test_fehlschlag_wirft_fehler_mit_stderr(self):
         with tempfile.TemporaryDirectory() as tmp:

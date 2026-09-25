@@ -82,11 +82,13 @@ jobs:
         run: |
           docker compose -p "mandant-${{ env.KUERZEL }}" \
             --env-file "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/.env" \
-            -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" logs --tail=200
+            -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" \
+            -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" logs --tail=200
 
       - name: Instanz wieder abbauen
         if: always()
         run: |
           docker compose -p "mandant-${{ env.KUERZEL }}" \
             --env-file "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/.env" \
-            -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" down -v || true
+            -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" \
+            -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" down -v || true
