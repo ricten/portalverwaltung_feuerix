@@ -35,6 +35,26 @@ class MandantInstanz(models.Model):
 
     web_port = models.PositiveIntegerField("Zugewiesener Web-Port", null=True, blank=True, editable=False)
 
+    # Optionale Zusatzdienste (Ausbaustufe 2): leere Domain = Dienst aus.
+    paperless_domain = models.CharField(
+        "Paperless-Domain", max_length=200, blank=True, validators=[gueltige_domain],
+        help_text="Leer = kein Paperless-ngx. Sonst eigener Compose-Stack je Mandant, automatisch im Reverse "
+                  "Proxy eingetragen und in Feuerix (Verwaltung › Paperless-Anbindung) hinterlegt.")
+    paperless_port = models.PositiveIntegerField("Paperless-Port", null=True, blank=True, editable=False)
+    paperless_secret_key = VerschluesseltesTextField("Paperless SECRET_KEY", blank=True, editable=False)
+    paperless_postgres_passwort = VerschluesseltesTextField("Paperless Postgres-Passwort", blank=True,
+                                                            editable=False)
+    paperless_admin_passwort = VerschluesseltesTextField("Paperless Admin-Passwort", blank=True, editable=False)
+
+    openslides_domain = models.CharField(
+        "OpenSlides-Domain", max_length=200, blank=True, validators=[gueltige_domain],
+        help_text="Leer = kein OpenSlides. Sonst eigener OpenSlides-4-Stack je Mandant, automatisch im "
+                  "Reverse Proxy eingetragen und in Feuerix (Verwaltung › OpenSlides-Anbindung) hinterlegt.")
+    openslides_port = models.PositiveIntegerField("OpenSlides-Port", null=True, blank=True, editable=False)
+    openslides_superadmin_passwort = VerschluesseltesTextField("OpenSlides Superadmin-Passwort", blank=True,
+                                                               editable=False)
+    openslides_initialisiert = models.BooleanField("OpenSlides initialisiert", default=False, editable=False)
+
     secret_key = VerschluesseltesTextField("SECRET_KEY", blank=True, editable=False)
     field_encryption_key = VerschluesseltesTextField("FIELD_ENCRYPTION_KEY", blank=True, editable=False)
     postgres_passwort = VerschluesseltesTextField("Postgres-Passwort", blank=True, editable=False)

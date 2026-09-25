@@ -31,21 +31,39 @@ def caddyfile_erzeugen(mandanten):
         zeilen.append("\tauto_https off")
     zeilen.append("}")
     for m in sorted(mandanten, key=lambda x: x.kuerzel):
-        try:
-            gueltige_domain(m.domain)
-        except ValidationError:
-            raise ProxyFehler(f"Ungültige Domain bei Instanz '{m.kuerzel}': {m.domain!r}")
-        if not m.web_port:
-            continue
-        if settings.PROXY_NUR_HTTP:
-            zeilen += [f"http://{m.domain} {{",
-                       f"\treverse_proxy 127.0.0.1:{int(m.web_port)} {{",
-                       "\t\theader_up X-Forwarded-Proto https",
-                       "\t}", "}"]
-        else:
-            zeilen += [f"{m.domain} {{", "\tencode gzip",
-                       f"\treverse_proxy 127.0.0.1:{int(m.web_port)}", "}"]
+        for domain in (m.domain, m.paperless_domain, m.openslides_domain):
+            if domain:
+                try:
+                    gueltige_domain(domain)
+                except ValidationError:
+                    raise ProxyFehler(f"Ungültige Domain bei Instanz '{m.kuerzel}': {domain!r}")
+        if m.web_port:
+            if settings.PROXY_NUR_HTTP:
+                # Feuerix (SECURE_SSL_REDIRECT) erwartet den Proxy als HTTPS-Terminierung
+                zeilen += _site(m.domain, m.web_port, ["header_up X-Forwarded-Proto https"])
+            else:
+                zeilen += _site(m.domain, m.web_port, [], gzip=True)
+        if m.paperless_domain and m.paperless_port:
+            zeilen += _site(m.paperless_domain, m.paperless_port, [], gzip=not settings.PROXY_NUR_HTTP)
+        if m.openslides_domain and m.openslides_port:
+            # OpenSlides nutzt Streaming (Autoupdate) - deshalb kein Puffern
+            zeilen += _site(m.openslides_domain, m.openslides_port, ["flush_interval -1"])
     return "\n".join(zeilen) + "\n"
+
+
+def _site(domain, port, unteranweisungen, gzip=False):
+    kopf = f"http://{domain} {{" if settings.PROXY_NUR_HTTP else f"{domain} {{"
+    zeilen = [kopf]
+    if gzip:
+        zeilen.append("\tencode gzip")
+    if unteranweisungen:
+        zeilen.append(f"\treverse_proxy 127.0.0.1:{int(port)} {{")
+        zeilen += [f"\t\t{a}" for a in unteranweisungen]
+        zeilen.append("\t}")
+    else:
+        zeilen.append(f"\treverse_proxy 127.0.0.1:{int(port)}")
+    zeilen.append("}")
+    return zeilen
 
 
 def proxy_aktualisieren():

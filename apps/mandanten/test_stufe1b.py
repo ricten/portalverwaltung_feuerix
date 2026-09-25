@@ -122,7 +122,7 @@ class BereitstellenMitProxyTests(TestCase):
     def _lauf(self, tmp, proxy_seiteneffekt=None):
         _compose_datei(tmp)
         m = MandantInstanz.objects.create(kuerzel="px", verein_name="PX", domain="px.example.org")
-        with patch("apps.mandanten.provisioning.subprocess.run", return_value=_ok()), \
+        with patch("apps.mandanten.basis.subprocess.run", return_value=_ok()), \
              patch("apps.mandanten.provisioning.urllib.request.urlopen", return_value=_urlopen_ok()), \
              patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", side_effect=proxy_seiteneffekt,
                    return_value=True) as pa:
@@ -156,7 +156,7 @@ class DockerFehlerTests(TestCase):
     def test_fehlendes_docker_wird_als_bereitstellungsfehler_gemeldet(self):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             m = self._mandant_mit_env(tmp)
-            with patch("apps.mandanten.provisioning.subprocess.run", side_effect=FileNotFoundError("docker")):
+            with patch("apps.mandanten.basis.subprocess.run", side_effect=FileNotFoundError("docker")):
                 with self.assertRaises(provisioning.BereitstellungsFehler):
                     provisioning.bereitstellen(m)
         m.refresh_from_db()
@@ -165,7 +165,7 @@ class DockerFehlerTests(TestCase):
     def test_docker_timeout_wird_als_bereitstellungsfehler_gemeldet(self):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             m = self._mandant_mit_env(tmp)
-            with patch("apps.mandanten.provisioning.subprocess.run",
+            with patch("apps.mandanten.basis.subprocess.run",
                        side_effect=subprocess.TimeoutExpired("docker", 900)):
                 with self.assertRaises(provisioning.BereitstellungsFehler):
                     provisioning.bereitstellen(m)
@@ -184,7 +184,7 @@ class AbbauenTests(TestCase):
     def test_abbauen_ohne_datenloeschung_setzt_pausiert(self):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             m = self._laufende_instanz(tmp)
-            with patch("apps.mandanten.provisioning.subprocess.run", return_value=_ok()) as run, \
+            with patch("apps.mandanten.basis.subprocess.run", return_value=_ok()) as run, \
                  patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=True) as pa:
                 provisioning.abbauen(m)
         befehl = run.call_args.args[0]
@@ -197,7 +197,7 @@ class AbbauenTests(TestCase):
     def test_abbauen_mit_datenloeschung_entfernt_volumes_und_setzt_geloescht(self):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             m = self._laufende_instanz(tmp)
-            with patch("apps.mandanten.provisioning.subprocess.run", return_value=_ok()) as run, \
+            with patch("apps.mandanten.basis.subprocess.run", return_value=_ok()) as run, \
                  patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=True):
                 provisioning.abbauen(m, daten_loeschen=True)
         self.assertIn("-v", run.call_args.args[0])
@@ -207,7 +207,7 @@ class AbbauenTests(TestCase):
     def test_fehlschlag_beim_abbau_laesst_status_unveraendert(self):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             m = self._laufende_instanz(tmp)
-            with patch("apps.mandanten.provisioning.subprocess.run",
+            with patch("apps.mandanten.basis.subprocess.run",
                        return_value=MagicMock(returncode=1, stderr="kaputt")):
                 with self.assertRaises(provisioning.BereitstellungsFehler):
                     provisioning.abbauen(m)
@@ -219,7 +219,7 @@ class AbbauenTests(TestCase):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             self._laufende_instanz(tmp)
             out = io.StringIO()
-            with patch("apps.mandanten.provisioning.subprocess.run", return_value=_ok()), \
+            with patch("apps.mandanten.basis.subprocess.run", return_value=_ok()), \
                  patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=True):
                 call_command("mandant_abbauen", "ab", stdout=out)
         self.assertIn("pausiert", out.getvalue())

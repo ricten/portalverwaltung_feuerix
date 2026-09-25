@@ -106,6 +106,9 @@ INSTANZEN_VERZEICHNIS = os.environ.get("INSTANZEN_VERZEICHNIS", str(BASE_DIR / "
 # Erster zu vergebender Web-Port - jede neue Instanz bekommt automatisch den naechsten freien (siehe
 # apps/mandanten/provisioning.py::naechster_freier_port).
 WEB_PORT_BASIS = int(os.environ.get("WEB_PORT_BASIS", "8100"))
+# Analog fuer die optionalen Zusatzdienste (jeder Mandant bekommt je Dienst einen eigenen freien Port).
+PAPERLESS_PORT_BASIS = int(os.environ.get("PAPERLESS_PORT_BASIS", "10100"))
+OPENSLIDES_PORT_BASIS = int(os.environ.get("OPENSLIDES_PORT_BASIS", "9100"))
 # Reverse-Proxy-Automatisierung (Caddy-Admin-API, z. B. http://127.0.0.1:2019). Leer = aus, dann Caddy von
 # Hand pflegen. Die Admin-API gibt vollen Zugriff auf Caddy - deshalb nur auf localhost erreichbar lassen.
 CADDY_ADMIN_URL = os.environ.get("CADDY_ADMIN_URL", "")

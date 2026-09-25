@@ -80,7 +80,7 @@ class StackHochfahrenTests(TestCase):
                 m = MandantInstanz.objects.create(kuerzel="y", verein_name="Y", domain="y.example.org")
                 provisioning.env_erzeugen(m)
                 fake = MagicMock(returncode=0, stderr="")
-                with patch("apps.mandanten.provisioning.subprocess.run", return_value=fake) as mock_run:
+                with patch("apps.mandanten.basis.subprocess.run", return_value=fake) as mock_run:
                     provisioning.stack_hochfahren(m)
                 befehl = mock_run.call_args.args[0]
                 self.assertIn("mandant-y", befehl)
@@ -100,7 +100,7 @@ class StackHochfahrenTests(TestCase):
                 m = MandantInstanz.objects.create(kuerzel="z2", verein_name="Z2", domain="z2.example.org")
                 provisioning.env_erzeugen(m)
                 fake = MagicMock(returncode=1, stderr="port bereits belegt")
-                with patch("apps.mandanten.provisioning.subprocess.run", return_value=fake):
+                with patch("apps.mandanten.basis.subprocess.run", return_value=fake):
                     with self.assertRaises(provisioning.BereitstellungsFehler) as ctx:
                         provisioning.stack_hochfahren(m)
                 self.assertIn("port bereits belegt", str(ctx.exception))
@@ -119,7 +119,7 @@ class BereitstellenPipelineTests(TestCase):
                 (Path(tmp) / "docker-compose.yml").write_text("services: {}\n")
                 m = MandantInstanz.objects.create(kuerzel="w", verein_name="W", domain="w.example.org")
                 fake_run = MagicMock(returncode=0, stderr="")
-                with patch("apps.mandanten.provisioning.subprocess.run", return_value=fake_run), \
+                with patch("apps.mandanten.basis.subprocess.run", return_value=fake_run), \
                      patch("apps.mandanten.provisioning.urllib.request.urlopen",
                            return_value=_fake_urlopen_context()):
                     provisioning.bereitstellen(m)
@@ -133,7 +133,7 @@ class BereitstellenPipelineTests(TestCase):
                 (Path(tmp) / "docker-compose.yml").write_text("services: {}\n")
                 m = MandantInstanz.objects.create(kuerzel="v", verein_name="V", domain="v.example.org")
                 fake_run = MagicMock(returncode=1, stderr="kaputt")
-                with patch("apps.mandanten.provisioning.subprocess.run", return_value=fake_run):
+                with patch("apps.mandanten.basis.subprocess.run", return_value=fake_run):
                     with self.assertRaises(provisioning.BereitstellungsFehler):
                         provisioning.bereitstellen(m)
                 m.refresh_from_db()
@@ -177,7 +177,7 @@ class ManagementCommandTests(TestCase):
                 MandantInstanz.objects.create(kuerzel="cmd-test", verein_name="Cmd", domain="cmd.example.org")
                 fake_run = MagicMock(returncode=0, stderr="")
                 out = __import__("io").StringIO()
-                with patch("apps.mandanten.provisioning.subprocess.run", return_value=fake_run), \
+                with patch("apps.mandanten.basis.subprocess.run", return_value=fake_run), \
                      patch("apps.mandanten.provisioning.urllib.request.urlopen",
                            return_value=_fake_urlopen_context()):
                     call_command("mandant_bereitstellen", "cmd-test", stdout=out)

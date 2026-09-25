@@ -1,21 +1,18 @@
-"""Bereitstellungs-Logik fuer eine Mandanten-Instanz (Ausbaustufe 1 + 1b: Feuerix selbst inkl. Reverse-Proxy-
-Eintrag, ohne OpenSlides/Paperless - siehe README).
+"""Bereitstellungs-Logik fuer eine Mandanten-Instanz: Feuerix selbst (Ausbaustufe 1), Reverse-Proxy-Eintrag
+(1b) und optionale Zusatzdienste Paperless-ngx / OpenSlides (Ausbaustufe 2).
 
-Ablauf (jeder Schritt einzeln aufrufbar und wiederholbar, damit ein Fehler mittendrin nicht die ganze
-Instanz in einem unklaren Zustand zuruecklaesst):
+Ablauf von bereitstellen() (jeder Schritt einzeln aufrufbar und wiederholbar, damit ein Fehler mittendrin
+die Instanz nicht in einem unklaren Zustand zuruecklaesst):
 
 1. env_erzeugen()            - prueft die Eingaben, generiert Geheimnisse (einmalig), schreibt die .env-Datei
 2. stack_hochfahren()        - startet den Docker-Compose-Stack unter einem eigenen Projektnamen
 3. auf_bereitschaft_warten() - wartet, bis die Weboberflaeche antwortet (= Migration/Ersteinrichtung durch,
                                siehe Feuerix' eigenes entrypoint.sh)
-4. proxy.proxy_aktualisieren() - traegt die Domain im Reverse Proxy (Caddy) ein (nur mit CADDY_ADMIN_URL)
+4. Zusatzdienste             - je nach gesetzter Domain: Paperless (paperless.py), OpenSlides (openslides.py)
+5. proxy.proxy_aktualisieren() - traegt alle Domains im Reverse Proxy (Caddy) ein (nur mit CADDY_ADMIN_URL)
 
-bereitstellen() fuehrt alle Schritte nacheinander aus und aktualisiert den Status entsprechend,
-abbauen() stoppt eine Instanz wieder (optional inkl. Daten) und nimmt sie aus dem Reverse Proxy.
+abbauen() stoppt eine Instanz samt Zusatzdiensten wieder (optional inkl. Daten) und nimmt sie aus dem Proxy.
 """
-import secrets
-import string
-import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -25,13 +22,9 @@ from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.exceptions import ValidationError
 
-from . import proxy
-from .models import MandantInstanz
+from . import basis, openslides, paperless, proxy
+from .basis import BereitstellungsFehler, docker, instanz_verzeichnis
 from .validatoren import gueltige_domain, keine_env_sonderzeichen
-
-
-class BereitstellungsFehler(Exception):
-    pass
 
 
 def eingaben_pruefen(mandant):
@@ -39,29 +32,21 @@ def eingaben_pruefen(mandant):
     (ohne Formular-Validierung) angelegt wurde, darf keine Injection durchrutschen."""
     try:
         gueltige_domain(mandant.domain)
+        for zusatz in (mandant.paperless_domain, mandant.openslides_domain):
+            if zusatz:
+                gueltige_domain(zusatz)
         for wert in (mandant.verein_name, mandant.admin_benutzername, mandant.admin_email):
             keine_env_sonderzeichen(wert)
     except ValidationError as e:
         raise BereitstellungsFehler(f"Ungültige Eingabe bei '{mandant.kuerzel}': {'; '.join(e.messages)}")
-
-
-def _zufallswert(laenge=50):
-    alphabet = string.ascii_letters + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(laenge))
+    domains = [d for d in (mandant.domain, mandant.paperless_domain, mandant.openslides_domain) if d]
+    if len(domains) != len(set(domains)):
+        raise BereitstellungsFehler(f"Ungültige Eingabe bei '{mandant.kuerzel}': Feuerix, Paperless und "
+                                    "OpenSlides brauchen jeweils eine eigene Domain.")
 
 
 def naechster_freier_port():
-    belegt = set(MandantInstanz.objects.exclude(web_port__isnull=True).values_list("web_port", flat=True))
-    port = settings.WEB_PORT_BASIS
-    while port in belegt:
-        port += 1
-    return port
-
-
-def instanz_verzeichnis(mandant):
-    pfad = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel
-    pfad.mkdir(parents=True, exist_ok=True)
-    return pfad
+    return basis.naechster_freier_port("web_port", settings.WEB_PORT_BASIS)
 
 
 _ENV_VORLAGE = """\
@@ -79,8 +64,8 @@ WEB_PORT={web_port}
 
 VEREIN_DOMAIN={domain}
 ACME_EMAIL={admin_email}
-OPENSLIDES_DOMAIN=
-PAPERLESS_DOMAIN=
+OPENSLIDES_DOMAIN={openslides_domain}
+PAPERLESS_DOMAIN={paperless_domain}
 VEREIN_TLS_CERT=
 VEREIN_TLS_KEY=
 OPENSLIDES_TLS_CERT=
@@ -103,16 +88,16 @@ def env_erzeugen(mandant):
     eingaben_pruefen(mandant)
     aenderungen = []
     if not mandant.secret_key:
-        mandant.secret_key = _zufallswert(50)
+        mandant.secret_key = basis.zufallswert(50)
         aenderungen.append("secret_key")
     if not mandant.field_encryption_key:
         mandant.field_encryption_key = Fernet.generate_key().decode()
         aenderungen.append("field_encryption_key")
     if not mandant.postgres_passwort:
-        mandant.postgres_passwort = _zufallswert(32)
+        mandant.postgres_passwort = basis.zufallswert(32)
         aenderungen.append("postgres_passwort")
     if not mandant.admin_passwort:
-        mandant.admin_passwort = _zufallswert(16)
+        mandant.admin_passwort = basis.zufallswert(16)
         aenderungen.append("admin_passwort")
     if not mandant.web_port:
         mandant.web_port = naechster_freier_port()
@@ -125,7 +110,8 @@ def env_erzeugen(mandant):
         postgres_passwort=mandant.postgres_passwort, kuerzel_unterstrich=mandant.kuerzel.replace("-", "_"),
         domain=mandant.domain, web_port=mandant.web_port, admin_email=mandant.admin_email,
         admin_benutzername=mandant.admin_benutzername, admin_passwort=mandant.admin_passwort,
-        verein_name=mandant.verein_name)
+        verein_name=mandant.verein_name, openslides_domain=mandant.openslides_domain,
+        paperless_domain=mandant.paperless_domain)
     env_pfad = instanz_verzeichnis(mandant) / ".env"
     env_pfad.write_text(inhalt, encoding="utf-8")
     mandant.protokollieren(f".env erzeugt unter {env_pfad}")
@@ -138,20 +124,18 @@ def compose_override_schreiben(mandant, env_pfad):
     Diese kleine Override-Datei biegt env_file je Mandant auf dessen eigene .env um (`!override` ersetzt die
     Liste statt sie zu ergaenzen; erfordert Docker Compose >= 2.24)."""
     pfad = instanz_verzeichnis(mandant) / "compose.mandant.yml"
-    env = env_pfad.resolve().as_posix()
+    env = basis.yaml_pfad(env_pfad)
     pfad.write_text(
         "services:\n"
         "  web:\n"
-        f"    env_file: !override\n      - \"{env}\"\n"
+        f"    env_file: !override\n      - {env}\n"
         "  worker:\n"
-        f"    env_file: !override\n      - \"{env}\"\n", encoding="utf-8")
+        f"    env_file: !override\n      - {env}\n", encoding="utf-8")
     return pfad
 
 
-
-
 def _compose_basis(mandant):
-    """Gemeinsame Argumente fuer alle docker-compose-Aufrufe dieser Instanz (hoch- und abbauen muessen
+    """Gemeinsame Argumente fuer alle docker-compose-Aufrufe der Feuerix-Instanz (hoch- und abbauen muessen
     dieselben Dateien/Variablen verwenden)."""
     env_pfad = instanz_verzeichnis(mandant) / ".env"
     if not env_pfad.exists():
@@ -165,23 +149,11 @@ def _compose_basis(mandant):
             "-f", str(compose_datei), "-f", str(override_datei)]
 
 
-def _docker(befehl, was, timeout=900):
-    try:
-        ergebnis = subprocess.run(befehl, cwd=settings.FEUERIX_REPO_PFAD, capture_output=True, text=True,
-                                  timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise BereitstellungsFehler(f"{was}: Zeitüberschreitung nach {timeout}s.")
-    except OSError as e:
-        raise BereitstellungsFehler(f"{was}: docker konnte nicht gestartet werden ({e}).")
-    if ergebnis.returncode != 0:
-        raise BereitstellungsFehler(f"{was} fehlgeschlagen:\n{ergebnis.stderr[-2000:]}")
-
-
 def stack_hochfahren(mandant):
     """Startet den Feuerix-Docker-Compose-Stack fuer diesen Mandanten unter einem eigenen Projektnamen -
     nutzt die docker-compose.yml aus dem konfigurierten Feuerix-Quellcode-Checkout direkt (kein Kopieren),
     damit Aenderungen an dieser Datei automatisch fuer neue Bereitstellungen gelten."""
-    _docker(_compose_basis(mandant) + ["up", "-d", "--build"], "docker compose up")
+    docker(_compose_basis(mandant) + ["up", "-d", "--build"], "docker compose up")
     mandant.protokollieren(f"Docker-Compose-Stack '{mandant.docker_projekt}' gestartet.")
 
 
@@ -189,7 +161,7 @@ def stack_abbauen(mandant, daten_loeschen=False):
     """Stoppt und entfernt die Container; mit daten_loeschen auch die Volumes (Datenbank, Medien) -
     unwiderruflich."""
     befehl = _compose_basis(mandant) + ["down"] + (["-v"] if daten_loeschen else [])
-    _docker(befehl, "docker compose down", timeout=300)
+    docker(befehl, "docker compose down", timeout=300)
     mandant.protokollieren(f"Docker-Compose-Stack '{mandant.docker_projekt}' abgebaut"
                            + (" (inkl. Daten)." if daten_loeschen else " (Daten erhalten)."))
 
@@ -218,15 +190,34 @@ def auf_bereitschaft_warten(mandant, timeout_sekunden=180, intervall_sekunden=5)
         f"Zeitüberschreitung: {url} antwortet nach {timeout_sekunden}s nicht ({letzter_fehler}).")
 
 
+def zusatzdienste_bereitstellen(mandant):
+    """Paperless/OpenSlides je nach gesetzter Domain - erst NACH der laufenden Feuerix-Instanz, da die
+    Anbindung dort eingetragen wird."""
+    if paperless.aktiv(mandant):
+        paperless.env_erzeugen(mandant)
+        paperless.hochfahren(mandant)
+        paperless.auf_bereitschaft_warten(mandant)
+        paperless.in_feuerix_eintragen(mandant, paperless.token_holen(mandant), _compose_basis(mandant))
+    if openslides.aktiv(mandant):
+        openslides.bereitstellen(mandant, _compose_basis(mandant))
+
+
 def _proxy_nachziehen(mandant):
     try:
         if proxy.proxy_aktualisieren():
             mandant.protokollieren("Reverse Proxy aktualisiert.")
         else:
             mandant.protokollieren("Reverse-Proxy-Automatisierung aus (CADDY_ADMIN_URL leer) - "
-                                   "Domain bitte von Hand eintragen.")
+                                   "Domains bitte von Hand eintragen.")
     except proxy.ProxyFehler as e:
         raise BereitstellungsFehler(f"Reverse Proxy: {e}")
+
+
+def feuerix_version():
+    try:
+        return (Path(settings.FEUERIX_REPO_PFAD) / "VERSION").read_text(encoding="utf-8").strip()[:20]
+    except OSError:
+        return ""
 
 
 def bereitstellen(mandant):
@@ -238,9 +229,11 @@ def bereitstellen(mandant):
         env_erzeugen(mandant)
         stack_hochfahren(mandant)
         auf_bereitschaft_warten(mandant)
+        zusatzdienste_bereitstellen(mandant)
         # Erst jetzt "laeuft": der Proxy nimmt nur Instanzen mit diesem Status auf.
         mandant.status = "laeuft"
-        mandant.save(update_fields=["status"])
+        mandant.feuerix_version = feuerix_version()
+        mandant.save(update_fields=["status", "feuerix_version"])
         _proxy_nachziehen(mandant)
     except BereitstellungsFehler as e:
         mandant.status = "fehlgeschlagen"
@@ -250,9 +243,11 @@ def bereitstellen(mandant):
 
 
 def abbauen(mandant, daten_loeschen=False):
-    """Stoppt die Instanz, nimmt sie aus dem Reverse Proxy und setzt den Status auf "pausiert" (Daten
-    erhalten) bzw. "geloescht" (mit daten_loeschen)."""
+    """Stoppt die Instanz samt Zusatzdiensten, nimmt sie aus dem Reverse Proxy und setzt den Status auf
+    "pausiert" (Daten erhalten) bzw. "geloescht" (mit daten_loeschen)."""
     try:
+        openslides.abbauen(mandant, daten_loeschen=daten_loeschen)
+        paperless.abbauen(mandant, daten_loeschen=daten_loeschen)
         stack_abbauen(mandant, daten_loeschen=daten_loeschen)
         mandant.status = "geloescht" if daten_loeschen else "pausiert"
         mandant.save(update_fields=["status"])
