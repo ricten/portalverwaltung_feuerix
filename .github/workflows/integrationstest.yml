@@ -159,6 +159,9 @@ jobs:
             -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" \
             -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" logs --tail=200 || true
           echo "--- caddy ---"; docker logs caddy --tail=100 || true
+          echo "--- paperless ---"
+          docker ps -a --filter label=com.docker.compose.project=mandant-${KUERZEL}-paperless || true
+          docker logs $(docker ps -aq --filter label=com.docker.compose.project=mandant-${KUERZEL}-paperless --filter label=com.docker.compose.service=webserver) --tail=120 || true
 
       - name: Aufraeumen (immer)
         if: always()

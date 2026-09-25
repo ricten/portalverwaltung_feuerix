@@ -1,13 +1,36 @@
 from celery import shared_task
 
+from . import betrieb
+from .basis import BereitstellungsFehler
 from .models import MandantInstanz
-from .provisioning import BereitstellungsFehler, bereitstellen
+from .provisioning import abbauen, bereitstellen
+
+
+def _ausfuehren(funktion, mandant_id, protokollieren):
+    mandant = MandantInstanz.objects.get(pk=mandant_id)
+    try:
+        funktion(mandant)
+    except BereitstellungsFehler as e:
+        if protokollieren:
+            mandant.protokollieren(f"Fehler: {e}")
+        # sonst: Status/Protokoll sind bereits in der Funktion gesetzt - hier nur nicht crashen lassen
 
 
 @shared_task
 def mandant_bereitstellen_task(mandant_id):
-    mandant = MandantInstanz.objects.get(pk=mandant_id)
-    try:
-        bereitstellen(mandant)
-    except BereitstellungsFehler:
-        pass  # Status/Protokoll sind bereits in bereitstellen() gesetzt - hier nur nicht crashen lassen
+    _ausfuehren(bereitstellen, mandant_id, protokollieren=False)
+
+
+@shared_task
+def mandant_pausieren_task(mandant_id):
+    _ausfuehren(abbauen, mandant_id, protokollieren=False)
+
+
+@shared_task
+def mandant_backup_task(mandant_id):
+    _ausfuehren(betrieb.backup, mandant_id, protokollieren=True)
+
+
+@shared_task
+def mandant_update_task(mandant_id):
+    _ausfuehren(betrieb.update_ausrollen, mandant_id, protokollieren=True)

@@ -5,7 +5,7 @@ Automatisierte Bereitstellung vollständig isolierter [Feuerix](https://github.c
 Mehrmandanten-Hosting, im Unterschied zur bereits in Feuerix selbst eingebauten (aber pro Instanz auf einen
 Verein gesperrten) Mandantenfähigkeit.
 
-## Stand: Ausbaustufe 1 + 1b
+## Stand: Ausbaustufe 1, 1b und 2 (Betrieb)
 
 Aktuell automatisiert:
 
@@ -32,10 +32,26 @@ Aktuell automatisiert:
 - **Fehlerbehandlung**: fehlendes `docker`, Zeitüberschreitungen und Proxy-Fehler enden im Status
   „fehlgeschlagen“ (mit Protokoll) statt in „wird bereitgestellt“ hängen zu bleiben.
 
-**Noch nicht automatisiert** (bewusst zurückgestellt):
+- **Paperless-ngx je Mandant (Ausbaustufe 2)**: Ist im Datensatz eine `paperless_domain` gesetzt, startet die
+  Portalverwaltung einen eigenen Compose-Stack `mandant-<kürzel>-paperless` (Vorlage `paperless/docker-compose.yml`
+  aus Feuerix, eigene Datenbank/Geheimnisse/Port ab `PAPERLESS_PORT_BASIS`, `export`/`consume` je Mandant),
+  trägt die Domain im Reverse Proxy ein, holt per API einen Token und hinterlegt die Anbindung in der
+  Feuerix-Instanz (Verwaltung › Paperless-Anbindung) – der Verein muss nichts einrichten.
+- **OpenSlides je Mandant (Ausbaustufe 2)**: Ist eine `openslides_domain` gesetzt, wird mit `osmanage`
+  (einmal geladen, in `INSTANZEN_VERZEICHNIS/_werkzeuge` zwischengespeichert) ein eigener OpenSlides-4-Stack
+  `mandant-<kürzel>-openslides` erzeugt (Tag aus Feuerix' `openslides/config.yml`, Port ab
+  `OPENSLIDES_PORT_BASIS`), gestartet, einmalig mit Startdaten initialisiert und als Anbindung
+  (Benutzer `superadmin`, Passwort verschlüsselt gespeichert) in Feuerix hinterlegt.
+- **Betrieb**:
+  - `python manage.py mandant_status` – Status/Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring/Cron)
+  - `python manage.py mandant_backup [kürzel]` – Feuerix' `backup.sh` im Container, Ergebnis wird nach
+    `INSTANZEN_VERZEICHNIS/<kürzel>/backups` kopiert (Paperless/OpenSlides-Daten: Volumes separat sichern)
+  - `python manage.py mandant_update [--git-pull] [--pause 10]` – rollt den aktuellen Feuerix-Code gestaffelt auf
+    alle laufenden Instanzen aus (Migrationen laufen beim Start; ein Fehler stoppt die anderen nicht)
+  - Django-Admin: Aktionen „Bereitstellen“, „Pausieren“, „Sichern“, „Aktualisieren“ (laufen über Celery)
 
-- **Ausbaustufe 2**: OpenSlides/Paperless als optionale Zusatzdienste je Mandant.
-- Backups je Mandant, Update-Rollout über alle Instanzen, Web-Oberfläche über den Django-Admin hinaus.
+**Bewusst nicht enthalten**: Abrechnung/Tarife, Self-Service-Anmeldung für Vereine, automatische
+Zertifikats-/Backup-Rotation über 14 Sicherungen hinaus (das übernimmt Feuerix' `backup.sh` je Instanz).
 
 ## Ablauf
 
@@ -69,6 +85,34 @@ verschlüsselt in der Portalverwaltungs-Datenbank (`FIELD_ENCRYPTION_KEY` dieser
 unbedingt sichern, ohne ihn sind sie nicht mehr lesbar) und werden bei einem erneuten Bereitstellungs-Versuch
 wiederverwendet, nie überschrieben.
 
+## Produktivbetrieb (Beispiel systemd)
+
+Der Celery-Worker läuft direkt auf dem Host (Docker-Zugriff, siehe oben). Beispiel
+`/etc/systemd/system/portal-worker.service`:
+
+```ini
+[Unit]
+Description=Portalverwaltung Celery-Worker
+After=network.target docker.service redis.service
+
+[Service]
+User=portal
+Group=docker
+WorkingDirectory=/opt/portalverwaltung_feuerix
+EnvironmentFile=/opt/portalverwaltung_feuerix/.env
+ExecStart=/opt/portalverwaltung_feuerix/venv/bin/celery -A config worker -l info --concurrency 2
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Caddy läuft als Dienst/Container mit `--network host` bzw. Admin-API nur auf `127.0.0.1:2019`. Für die
+Überwachung genügt ein Cron/Timer mit `python manage.py mandant_status`, für Sicherungen ein nächtlicher
+`python manage.py mandant_backup`. Auf dem Server müssen die Ports `PAPERLESS_PORT_BASIS`ff. und
+`OPENSLIDES_PORT_BASIS`ff. nur lokal (127.0.0.1) gebunden sein – der öffentliche Zugriff läuft ausschließlich
+über den Reverse Proxy.
+
 ## Lokale Entwicklung
 
 ```bash
@@ -90,7 +134,7 @@ Zwei Ebenen:
   schnell, mocken `docker compose` und die HTTP-Bereitschaftsprüfung – prüfen die eigentliche Logik
   (Geheimniserzeugung, Port-Vergabe, `.env`-Inhalt, Status-Zustandsautomat).
 - **Integrationstest** (`.github/workflows/integrationstest.yml`, läuft bei jedem Push nach `master`/`main`
-  sowie manuell auslösbar): stellt **echt** eine Feuerix-Instanz per `docker compose` bereit (Checkout von
+  sowie manuell auslösbar): stellt **echt** eine Feuerix-Instanz (inkl. Paperless; ein zweiter Job OpenSlides) per `docker compose` bereit (Checkout von
   Feuerix + Portalverwaltung, kein Mock), prüft die Login-Seite inhaltlich und – als Regressionsschutz für
   den bei Feuerix selbst gefundenen `DEBUG=True`-Vorfall – dass eine bereitgestellte Instanz tatsächlich mit
   `DEBUG=0` läuft. Baut den Stack am Ende wieder ab (`docker compose down -v`), auch bei einem Fehlschlag.

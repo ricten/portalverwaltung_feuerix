@@ -79,6 +79,8 @@ class PaperlessComposeTests(TestCase):
             self.assertIn("/usr/src/paperless/export", override)
             self.assertIn((Path(tmp) / "pl" / "paperless" / "export").resolve().as_posix(), override)
             self.assertTrue((Path(tmp) / "pl" / "paperless" / "consume").is_dir())
+            for zeile in override.splitlines()[3:]:   # gueltiges YAML: ganzer Eintrag in EINEN Anfuehrungszeichen
+                self.assertRegex(zeile, r'^      - "[^"]+:/usr/src/paperless/(export|consume)"$')
 
     def test_ohne_env_wird_abgelehnt(self):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
