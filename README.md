@@ -68,3 +68,17 @@ python manage.py test --settings=config.settings_sqlite
 `FEUERIX_REPO_PFAD` muss auf einen lokalen Checkout von
 [Feuerix](https://github.com/ricten/Feuerix) zeigen (Standard: `../vereinsverwaltung`, passend zu einer
 Ordnerstruktur, in der beide Repos nebeneinander liegen).
+
+## Tests
+
+Zwei Ebenen:
+
+- **Unit-Tests** (`apps/mandanten/tests.py`, `python manage.py test --settings=config.settings_sqlite`):
+  schnell, mocken `docker compose` und die HTTP-Bereitschaftsprüfung – prüfen die eigentliche Logik
+  (Geheimniserzeugung, Port-Vergabe, `.env`-Inhalt, Status-Zustandsautomat).
+- **Integrationstest** (`.github/workflows/integrationstest.yml`, läuft bei jedem Push nach `master`/`main`
+  sowie manuell auslösbar): stellt **echt** eine Feuerix-Instanz per `docker compose` bereit (Checkout von
+  Feuerix + Portalverwaltung, kein Mock), prüft die Login-Seite inhaltlich und – als Regressionsschutz für
+  den bei Feuerix selbst gefundenen `DEBUG=True`-Vorfall – dass eine bereitgestellte Instanz tatsächlich mit
+  `DEBUG=0` läuft. Baut den Stack am Ende wieder ab (`docker compose down -v`), auch bei einem Fehlschlag.
+  Braucht keine GitHub Secrets, da alle Geheimnisse automatisch erzeugt werden.
