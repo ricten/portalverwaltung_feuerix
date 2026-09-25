@@ -1,0 +1,117 @@
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _bool(name, default="0"):
+    return os.environ.get(name, default).lower() in ("1", "true", "yes", "ja")
+
+
+SECRET_KEY = os.environ["SECRET_KEY"]
+DEBUG = _bool("DEBUG")
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
+
+# Schluessel fuer die verschluesselt gespeicherten Geheimnisse (SECRET_KEY/FIELD_ENCRYPTION_KEY/Passwoerter)
+# jeder verwalteten Mandanten-Instanz - NICHT zu verwechseln mit deren eigenem FIELD_ENCRYPTION_KEY.
+FIELD_ENCRYPTION_KEY = os.environ.get("FIELD_ENCRYPTION_KEY", "")
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "apps.mandanten",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = "config.wsgi.application"
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB", "portalverwaltung"),
+        "USER": os.environ.get("POSTGRES_USER", "portal"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
+        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+    }
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+LANGUAGE_CODE = "de"
+TIME_ZONE = "Europe/Berlin"
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+LOGIN_URL = "admin:login"
+LOGIN_REDIRECT_URL = "admin:index"
+
+HTTPS = _bool("HTTPS")
+if HTTPS:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = True
+
+# --- Portalverwaltung-spezifisch ---
+# Pfad zum lokalen Checkout des Feuerix-Quellcodes ("vereinsverwaltung") - von dort wird die dortige
+# docker-compose.yml direkt fuer jede neue Instanz verwendet (kein Kopieren, damit Aenderungen daran
+# automatisch fuer neue Bereitstellungen gelten).
+FEUERIX_REPO_PFAD = os.environ.get("FEUERIX_REPO_PFAD", str(BASE_DIR.parent / "vereinsverwaltung"))
+# Wo die generierten .env-Dateien je Mandant abgelegt werden.
+INSTANZEN_VERZEICHNIS = os.environ.get("INSTANZEN_VERZEICHNIS", str(BASE_DIR / "instanzen"))
+# Erster zu vergebender Web-Port - jede neue Instanz bekommt automatisch den naechsten freien (siehe
+# apps/mandanten/provisioning.py::naechster_freier_port).
+WEB_PORT_BASIS = int(os.environ.get("WEB_PORT_BASIS", "8100"))
+
+# --- Celery ---
+# WICHTIG (siehe README "Sicherheit"): der Celery-Worker fuehrt echte docker-Befehle auf dem Host aus und
+# sollte deshalb NICHT selbst in einem Container mit gemountetem Docker-Socket laufen, sondern direkt auf
+# dem Host als eigener Prozess.
+CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_TASK_ALWAYS_EAGER = _bool("CELERY_EAGER")
+CELERY_TASK_EAGER_PROPAGATES = _bool("CELERY_EAGER")
