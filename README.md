@@ -5,7 +5,7 @@ Automatisierte Bereitstellung vollständig isolierter [Feuerix](https://github.c
 Mehrmandanten-Hosting, im Unterschied zur bereits in Feuerix selbst eingebauten (aber pro Instanz auf einen
 Verein gesperrten) Mandantenfähigkeit.
 
-## Stand: Ausbaustufe 1
+## Stand: Ausbaustufe 1 + 1b
 
 Aktuell automatisiert:
 
@@ -17,12 +17,25 @@ Aktuell automatisiert:
   Änderungen daran automatisch für neue Bereitstellungen gelten
 - **Bereitschaftsprüfung**: wartet, bis die Login-Seite antwortet (= Migration + automatische
   Ersteinrichtung durch Feuerix' eigenes `entrypoint.sh` sind durchgelaufen)
+- **Reverse Proxy (Ausbaustufe 1b)**: Sobald `CADDY_ADMIN_URL` gesetzt ist (z. B. `http://127.0.0.1:2019`),
+  erzeugt die Portalverwaltung aus dem Datenbestand ein Caddyfile mit einem Site-Block je *laufender*
+  Instanz und lädt es über die Caddy-Admin-API ohne Neustart nach (`apps/mandanten/proxy.py`). Caddy holt das
+  Let's-Encrypt-Zertifikat selbst. Die Konfiguration wird jedes Mal komplett neu erzeugt (idempotent). Ohne
+  `CADDY_ADMIN_URL` bleibt die Automatisierung aus. Die Admin-API gibt vollen Zugriff auf Caddy – nur auf
+  localhost erreichbar lassen. DNS muss auf den Server zeigen (Wildcard-DNS `*.domain` empfohlen).
+- **Abbau**: `python manage.py mandant_abbauen <kürzel> [--daten-loeschen]` stoppt die Instanz und nimmt sie
+  aus dem Reverse Proxy (Status „pausiert“; mit `--daten-loeschen` werden auch Datenbank und Medien
+  unwiderruflich entfernt, Status „gelöscht“).
+- **Eingabe-Härtung**: Vereinsname, Admin-Daten und Domain landen in `.env` bzw. Caddyfile und werden
+  deshalb streng geprüft (keine Zeilenumbrüche/Steuerzeichen, gültiges Domain-Format) – auch wenn der
+  Datensatz ohne Formular angelegt wurde.
+- **Fehlerbehandlung**: fehlendes `docker`, Zeitüberschreitungen und Proxy-Fehler enden im Status
+  „fehlgeschlagen“ (mit Protokoll) statt in „wird bereitgestellt“ hängen zu bleiben.
 
-**Noch nicht automatisiert** (bewusst zurückgestellt, siehe Ausbaustufen unten):
+**Noch nicht automatisiert** (bewusst zurückgestellt):
 
-- **Ausbaustufe 1b**: Reverse-Proxy-Eintrag (Caddy) für die neue Domain – muss aktuell noch von Hand
-  angelegt werden.
 - **Ausbaustufe 2**: OpenSlides/Paperless als optionale Zusatzdienste je Mandant.
+- Backups je Mandant, Update-Rollout über alle Instanzen, Web-Oberfläche über den Django-Admin hinaus.
 
 ## Ablauf
 

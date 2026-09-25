@@ -106,6 +106,12 @@ INSTANZEN_VERZEICHNIS = os.environ.get("INSTANZEN_VERZEICHNIS", str(BASE_DIR / "
 # Erster zu vergebender Web-Port - jede neue Instanz bekommt automatisch den naechsten freien (siehe
 # apps/mandanten/provisioning.py::naechster_freier_port).
 WEB_PORT_BASIS = int(os.environ.get("WEB_PORT_BASIS", "8100"))
+# Reverse-Proxy-Automatisierung (Caddy-Admin-API, z. B. http://127.0.0.1:2019). Leer = aus, dann Caddy von
+# Hand pflegen. Die Admin-API gibt vollen Zugriff auf Caddy - deshalb nur auf localhost erreichbar lassen.
+CADDY_ADMIN_URL = os.environ.get("CADDY_ADMIN_URL", "")
+CADDY_ACME_EMAIL = os.environ.get("CADDY_ACME_EMAIL", "")
+# Nur fuer Tests/lokal: reines HTTP ohne Zertifikate (siehe proxy.py).
+PROXY_NUR_HTTP = _bool("PROXY_NUR_HTTP")
 
 # --- Celery ---
 # WICHTIG (siehe README "Sicherheit"): der Celery-Worker fuehrt echte docker-Befehle auf dem Host aus und

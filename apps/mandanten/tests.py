@@ -125,7 +125,7 @@ class BereitstellenPipelineTests(TestCase):
                     provisioning.bereitstellen(m)
                 m.refresh_from_db()
                 self.assertEqual(m.status, "laeuft")
-                self.assertIn("Bereitstellung abgeschlossen", m.protokoll)
+                self.assertIn("Instanz ist bereit", m.protokoll)
 
     def test_fehlschlag_bei_compose_setzt_status_fehlgeschlagen(self):
         with tempfile.TemporaryDirectory() as tmp:

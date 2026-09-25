@@ -1,0 +1,25 @@
+from django.core.management.base import BaseCommand, CommandError
+
+from apps.mandanten.models import MandantInstanz
+from apps.mandanten.provisioning import BereitstellungsFehler, abbauen
+
+
+class Command(BaseCommand):
+    help = ("Stoppt eine Mandanten-Instanz und nimmt sie aus dem Reverse Proxy. Ohne --daten-loeschen bleiben "
+           "Datenbank und Medien erhalten (Status 'pausiert', mit mandant_bereitstellen wieder startbar).")
+
+    def add_arguments(self, parser):
+        parser.add_argument("kuerzel")
+        parser.add_argument("--daten-loeschen", action="store_true",
+                            help="Volumes (Datenbank, Medien) UNWIDERRUFLICH mit entfernen")
+
+    def handle(self, *args, **options):
+        try:
+            mandant = MandantInstanz.objects.get(kuerzel=options["kuerzel"])
+        except MandantInstanz.DoesNotExist:
+            raise CommandError(f"Keine Mandanten-Instanz mit Kürzel '{options['kuerzel']}' gefunden.")
+        try:
+            abbauen(mandant, daten_loeschen=options["daten_loeschen"])
+        except BereitstellungsFehler as e:
+            raise CommandError(str(e))
+        self.stdout.write(self.style.SUCCESS(f"Instanz '{mandant.kuerzel}' abgebaut (Status: {mandant.status})."))

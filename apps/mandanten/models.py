@@ -2,13 +2,15 @@ from django.db import models
 from django.utils import timezone
 
 from .fields import VerschluesseltesTextField
+from .validatoren import gueltige_domain, keine_env_sonderzeichen
 
 STATUS = [
     ("neu", "Neu (noch nicht bereitgestellt)"),
     ("wird_bereitgestellt", "Wird bereitgestellt"),
     ("laeuft", "Läuft"),
     ("fehlgeschlagen", "Fehlgeschlagen"),
-    ("pausiert", "Pausiert"),
+    ("pausiert", "Pausiert (gestoppt, Daten erhalten)"),
+    ("geloescht", "Gelöscht (Daten entfernt)"),
 ]
 
 
@@ -22,13 +24,14 @@ class MandantInstanz(models.Model):
         "Kürzel", max_length=50, unique=True,
         help_text="Nur Kleinbuchstaben/Ziffern/Bindestrich - wird für den Docker-Compose-Projektnamen, das "
                   "Instanzverzeichnis und den Datenbanknamen verwendet. Nachträglich nicht mehr änderbar.")
-    verein_name = models.CharField("Vereinsname", max_length=200)
-    domain = models.CharField("Domain", max_length=200,
+    verein_name = models.CharField("Vereinsname", max_length=200, validators=[keine_env_sonderzeichen])
+    domain = models.CharField("Domain", max_length=200, validators=[gueltige_domain],
                               help_text="z. B. verein-x.beispiel.de (für VEREIN_DOMAIN in der generierten "
-                                        ".env) - der Reverse-Proxy-Eintrag muss aktuell noch von Hand "
-                                        "angelegt werden, siehe README Ausbaustufe 1b.")
-    admin_benutzername = models.CharField("Admin-Benutzername", max_length=150, default="admin")
-    admin_email = models.EmailField("Admin-E-Mail", blank=True)
+                                        ".env und den Reverse-Proxy-Eintrag, sofern CADDY_ADMIN_URL gesetzt "
+                                        "ist). DNS muss auf den Server zeigen (Wildcard-DNS empfohlen).")
+    admin_benutzername = models.CharField("Admin-Benutzername", max_length=150, default="admin",
+                                          validators=[keine_env_sonderzeichen])
+    admin_email = models.EmailField("Admin-E-Mail", blank=True, validators=[keine_env_sonderzeichen])
 
     web_port = models.PositiveIntegerField("Zugewiesener Web-Port", null=True, blank=True, editable=False)
 

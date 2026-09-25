@@ -1,11 +1,9 @@
 name: Integrationstest (echte Bereitstellung)
 
 # Stellt eine echte Feuerix-Instanz ueber die Portalverwaltung bereit (kein Mock) - im Unterschied zu den
-# 14 Unit-Tests in apps/mandanten/tests.py, die docker/HTTP mocken. Braucht dafuer echtes Docker, das auf
-# GitHub-gehosteten Ubuntu-Runnern bereits vorinstalliert ist. Keine Secrets noetig: sowohl die Geheimnisse
-# der Portalverwaltung selbst (settings_sqlite.py) als auch die der bereitgestellten Test-Instanz
-# (SECRET_KEY/FIELD_ENCRYPTION_KEY/Passwoerter, siehe provisioning.py::env_erzeugen) werden automatisch
-# erzeugt.
+# Unit-Tests, die docker/HTTP mocken. Braucht dafuer echtes Docker, das auf GitHub-gehosteten Ubuntu-Runnern
+# bereits vorinstalliert ist. Auch der Reverse Proxy ist echt: ein Caddy-Container, dessen Konfiguration die
+# Portalverwaltung ueber die Admin-API pflegt. Keine Secrets noetig: alle Geheimnisse werden automatisch erzeugt.
 
 on:
   push:
@@ -15,13 +13,16 @@ on:
 jobs:
   bereitstellung:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       DJANGO_SETTINGS_MODULE: config.settings_sqlite
       FEUERIX_REPO_PFAD: ${{ github.workspace }}/feuerix
       INSTANZEN_VERZEICHNIS: ${{ github.workspace }}/instanzen
       WEB_PORT_BASIS: "8100"
       KUERZEL: ci-test
+      DOMAIN: ci-test.example.test
+      CADDY_ADMIN_URL: http://127.0.0.1:2019
+      PROXY_NUR_HTTP: "1"   # Caddy im Test ohne Zertifikate (reines HTTP auf Port 80)
 
     steps:
       - name: Portalverwaltung auschecken
@@ -45,6 +46,10 @@ jobs:
         working-directory: portalverwaltung
         run: pip install -r requirements.txt
 
+      - name: Unit-Tests
+        working-directory: portalverwaltung
+        run: python manage.py test
+
       - name: Portalverwaltungs-Datenbank einrichten
         working-directory: portalverwaltung
         run: python manage.py migrate
@@ -55,27 +60,64 @@ jobs:
           python manage.py shell -c "
           from apps.mandanten.models import MandantInstanz
           MandantInstanz.objects.get_or_create(kuerzel='${{ env.KUERZEL }}', defaults={
-              'verein_name': 'CI-Test e.V.', 'domain': 'localhost', 'admin_email': 'ci@example.org'})
+              'verein_name': 'CI-Test e.V.', 'domain': '${{ env.DOMAIN }}', 'admin_email': 'ci@example.org'})
           "
 
-      - name: Instanz bereitstellen (echtes docker compose up)
+      - name: Caddy (Reverse Proxy) starten
+        run: |
+          docker run -d --name caddy --network host caddy:2
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:2019/config/ >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:2019/config/ >/dev/null || { echo "FEHLER: Caddy-Admin-API nicht erreichbar"; exit 1; }
+          echo "OK: Caddy laeuft."
+
+      - name: Instanz bereitstellen (echtes docker compose up + Proxy-Eintrag)
         working-directory: portalverwaltung
         run: python manage.py mandant_bereitstellen "${{ env.KUERZEL }}"
 
-      - name: Login-Seite inhaltlich pruefen
+      - name: Login-Seite direkt pruefen
         run: |
-          antwort=$(curl -sf -H "Host: localhost" -H "X-Forwarded-Proto: https" "http://127.0.0.1:${WEB_PORT_BASIS}/login/")
+          antwort=$(curl -sf -H "Host: ${DOMAIN}" -H "X-Forwarded-Proto: https" "http://127.0.0.1:${WEB_PORT_BASIS}/login/")
           echo "$antwort" | grep -qi "csrfmiddlewaretoken" || { echo "FEHLER: Login-Seite sieht nicht wie erwartet aus."; exit 1; }
-          echo "OK: Login-Seite antwortet korrekt."
+          echo "OK: Login-Seite antwortet direkt korrekt."
+
+      - name: Login-Seite über den Reverse Proxy pruefen (Portalverwaltung hat Caddy konfiguriert)
+        run: |
+          antwort=$(curl -sf -H "Host: ${DOMAIN}" "http://127.0.0.1:80/login/")
+          echo "$antwort" | grep -qi "csrfmiddlewaretoken" || { echo "FEHLER: Instanz ist ueber Caddy nicht erreichbar."; exit 1; }
+          echo "OK: Instanz ist ueber den Reverse Proxy erreichbar."
 
       - name: DEBUG=0 der bereitgestellten Instanz pruefen
         run: |
-          antwort=$(curl -s -H "Host: localhost" -H "X-Forwarded-Proto: https" "http://127.0.0.1:${WEB_PORT_BASIS}/pfad-der-nicht-existiert-xyz/")
+          antwort=$(curl -s -H "Host: ${DOMAIN}" "http://127.0.0.1:80/pfad-der-nicht-existiert-xyz/")
           if echo "$antwort" | grep -qi "You're seeing this error because you have"; then
             echo "FEHLER: Die bereitgestellte Instanz laeuft mit DEBUG=True!"
             exit 1
           fi
           echo "OK: DEBUG ist korrekt aus (siehe auch das Sicherheits-Audit von Feuerix selbst)."
+
+      - name: Erneute Bereitstellung ist idempotent (Geheimnisse bleiben, Instanz bleibt erreichbar)
+        working-directory: portalverwaltung
+        run: |
+          vorher=$(sha256sum "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/.env" | cut -d' ' -f1)
+          python manage.py mandant_bereitstellen "${KUERZEL}"
+          nachher=$(sha256sum "${INSTANZEN_VERZEICHNIS}/${KUERZEL}/.env" | cut -d' ' -f1)
+          [ "$vorher" = "$nachher" ] || { echo "FEHLER: .env hat sich beim erneuten Bereitstellen geaendert (Geheimnisse neu erzeugt?)"; exit 1; }
+          curl -sf -H "Host: ${DOMAIN}" "http://127.0.0.1:80/login/" | grep -qi "csrfmiddlewaretoken"
+          echo "OK: idempotent."
+
+      - name: Instanz abbauen (inkl. Daten) und Aufraeumen pruefen
+        working-directory: portalverwaltung
+        run: |
+          python manage.py mandant_abbauen "${KUERZEL}" --daten-loeschen
+          [ -z "$(docker ps -aq --filter label=com.docker.compose.project=mandant-${KUERZEL})" ] || { echo "FEHLER: Container uebrig"; exit 1; }
+          [ -z "$(docker volume ls -q --filter label=com.docker.compose.project=mandant-${KUERZEL})" ] || { echo "FEHLER: Volumes uebrig"; exit 1; }
+          if curl -s -H "Host: ${DOMAIN}" "http://127.0.0.1:80/login/" | grep -qi "csrfmiddlewaretoken"; then
+            echo "FEHLER: Instanz ist nach dem Abbau noch ueber den Proxy erreichbar."; exit 1
+          fi
+          echo "OK: Container, Volumes und Proxy-Eintrag sind weg."
 
       - name: Container-Logs bei Fehlschlag ausgeben
         if: failure()
@@ -83,12 +125,14 @@ jobs:
           docker compose -p "mandant-${{ env.KUERZEL }}" \
             --env-file "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/.env" \
             -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" \
-            -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" logs --tail=200
+            -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" logs --tail=200 || true
+          echo "--- caddy ---"; docker logs caddy --tail=100 || true
 
-      - name: Instanz wieder abbauen
+      - name: Aufraeumen (immer)
         if: always()
         run: |
           docker compose -p "mandant-${{ env.KUERZEL }}" \
             --env-file "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/.env" \
             -f "${{ env.FEUERIX_REPO_PFAD }}/docker-compose.yml" \
             -f "${{ env.INSTANZEN_VERZEICHNIS }}/${{ env.KUERZEL }}/compose.mandant.yml" down -v || true
+          docker rm -f caddy || true
