@@ -60,6 +60,10 @@ sollen (PostgreSQL + Redis als Container, Caddy als Reverse Proxy, Celery-Worker
 systemd-Dienste, eigene Domain der Portalverwaltung), erzeugt `.env` mit Zufallsgeheimnissen, migriert und
 legt den Administrator an. OpenSlides und Paperless wählst du je Verein über die Domain-Felder.
 
+Im Instanzformular gibt es Haken „Paperless-ngx installieren“ und „OpenSlides installieren“ (ohne eigene Domain
+wird `paperless.<domain>` bzw. `openslides.<domain>` genommen – DNS bzw. Wildcard-DNS nötig). Bei einer bereits
+laufenden Instanz wird der Dienst nach dem Speichern automatisch nachinstalliert.
+
 Die **Weboberfläche** ist das Django-Admin (`/admin/`, bei gesetzter `PORTAL_DOMAIN` automatisch über Caddy mit
 HTTPS): Die Instanzliste zeigt Status, Version und eine **Live-Erreichbarkeit je Dienst** (grün/rot), dazu
 Aktionen zum Bereitstellen, Pausieren, Sichern und Aktualisieren, das Protokoll je Instanz, einen

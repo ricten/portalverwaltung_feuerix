@@ -215,3 +215,49 @@ class FortschrittUndPasswortTests(TestCase):
         with patch("apps.mandanten.betrieb.admin_passwort_zuruecksetzen", return_value="NEUESPW"):
             admin.admin_passwort_zuruecksetzen(request, MandantInstanz.objects.all())
         self.assertIn("NEUESPW", request._messages.add.call_args.args[1])
+
+
+class NachinstallationTests(TestCase):
+    def setUp(self):
+        self.admin_user = get_user_model().objects.create_superuser("adm", "a@example.org", "x")
+        self.client.force_login(self.admin_user)
+
+    def _post(self, m, **extra):
+        daten = dict(kuerzel=m.kuerzel, verein_name=m.verein_name, domain=m.domain, admin_benutzername="admin",
+                     admin_email="")
+        daten.update(extra)
+        return self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/change/", daten)
+
+    def test_haken_fuellt_domain_und_installiert_nach(self):
+        m = _m()
+        with patch("apps.mandanten.tasks.mandant_bereitstellen_task.delay") as delay:
+            antwort = self._post(m, paperless_installieren="on")
+        self.assertEqual(antwort.status_code, 302)
+        m.refresh_from_db()
+        self.assertEqual(m.paperless_domain, "paperless.b1.example.org")
+        self.assertEqual(m.status, "wird_bereitgestellt")
+        delay.assert_called_once_with(m.pk)
+
+    def test_ohne_neuen_dienst_keine_bereitstellung(self):
+        m = _m()
+        with patch("apps.mandanten.tasks.mandant_bereitstellen_task.delay") as delay:
+            self._post(m)
+        delay.assert_not_called()
+        m.refresh_from_db()
+        self.assertEqual(m.status, "laeuft")
+
+    def test_eigene_domain_hat_vorrang(self):
+        m = _m()
+        with patch("apps.mandanten.tasks.mandant_bereitstellen_task.delay"):
+            self._post(m, openslides_installieren="on", openslides_domain="versammlung.example.org")
+        m.refresh_from_db()
+        self.assertEqual(m.openslides_domain, "versammlung.example.org")
+
+    def test_bei_neuer_instanz_nur_speichern(self):
+        with patch("apps.mandanten.tasks.mandant_bereitstellen_task.delay") as delay:
+            antwort = self.client.post("/admin/mandanten/mandantinstanz/add/", dict(
+                kuerzel="neu", verein_name="Neu e.V.", domain="neu.example.org", admin_benutzername="admin",
+                admin_email="", openslides_installieren="on"))
+        self.assertEqual(antwort.status_code, 302)
+        self.assertEqual(MandantInstanz.objects.get(kuerzel="neu").openslides_domain, "openslides.neu.example.org")
+        delay.assert_not_called()   # Bereitstellung startet der Admin bewusst per Aktion

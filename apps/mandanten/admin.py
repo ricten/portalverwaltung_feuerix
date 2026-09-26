@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin, messages
 from django.http import JsonResponse
 from django.urls import path, reverse
@@ -8,6 +9,35 @@ from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
 
+class MandantForm(forms.ModelForm):
+    """Haken fuer Zusatzdienste: ohne eigene Domain wird `paperless.<domain>` bzw. `openslides.<domain>` genommen."""
+    paperless_installieren = forms.BooleanField(
+        label="Paperless-ngx installieren", required=False,
+        help_text="Dokumentenmanagement. Bei bereits laufender Instanz wird es nachinstalliert. Entfernen "
+                  "geschieht nicht automatisch (Daten bleiben erhalten).")
+    openslides_installieren = forms.BooleanField(
+        label="OpenSlides installieren", required=False,
+        help_text="Digitale Versammlungen/Wahlen. Bei bereits laufender Instanz wird es nachinstalliert.")
+
+    class Meta:
+        model = MandantInstanz
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["paperless_installieren"].initial = bool(self.instance.paperless_domain)
+            self.fields["openslides_installieren"].initial = bool(self.instance.openslides_domain)
+
+    def clean(self):
+        daten = super().clean()
+        domain = daten.get("domain")
+        for dienst in ("paperless", "openslides"):
+            if daten.get(f"{dienst}_installieren") and domain and not daten.get(f"{dienst}_domain"):
+                daten[f"{dienst}_domain"] = f"{dienst}.{domain}"
+        return daten
+
+
 @admin.register(MandantInstanz)
 class MandantInstanzAdmin(admin.ModelAdmin):
     list_display = ("kuerzel", "verein_name", "domain", "status", "fortschrittsbalken", "erreichbarkeit",
@@ -16,6 +46,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                        "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
+    form = MandantForm
     actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren", "admin_passwort_zuruecksetzen"]
 
     class Media:
@@ -59,11 +90,26 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     def get_fields(self, request, obj=None):
         pflichtfelder = ["kuerzel", "verein_name", "domain", "admin_benutzername", "admin_email",
-                         "paperless_domain", "openslides_domain"]
+                         "paperless_installieren", "paperless_domain", "openslides_installieren",
+                         "openslides_domain"]
         if obj is None:
             return pflichtfelder
         return pflichtfelder + ["web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                                 "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am"]
+
+    def save_model(self, request, obj, form, change):
+        alt = MandantInstanz.objects.filter(pk=obj.pk).first() if change else None
+        super().save_model(request, obj, form, change)
+        neu = alt is not None and obj.status == "laeuft" and (
+            (obj.paperless_domain and not alt.paperless_domain)
+            or (obj.openslides_domain and not alt.openslides_domain))
+        if neu:
+            # laufende Instanz: Zusatzdienst nachinstallieren (Bereitstellen ist idempotent)
+            obj.status, obj.fortschritt, obj.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
+            obj.save(update_fields=["status", "fortschritt", "schritt"])
+            tasks.mandant_bereitstellen_task.delay(obj.pk)
+            self.message_user(request, "Zusatzdienst wird nachinstalliert - Fortschritt siehe Spalte „Fortschritt“.",
+                              messages.INFO)
 
     def _starten(self, request, queryset, task, text):
         for m in queryset:
