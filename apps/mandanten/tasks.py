@@ -22,7 +22,7 @@ def mandant_bereitstellen_task(mandant_id):
 
 
 @shared_task
-def mandant_pausieren_task(mandant_id):
+def mandant_stilllegen_task(mandant_id):
     _ausfuehren(abbauen, mandant_id, protokollieren=False)
 
 

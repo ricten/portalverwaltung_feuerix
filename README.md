@@ -27,7 +27,7 @@ Aktuell automatisiert:
   `CADDY_ADMIN_URL` bleibt die Automatisierung aus. Die Admin-API gibt vollen Zugriff auf Caddy – nur auf
   localhost erreichbar lassen. DNS muss auf den Server zeigen (Wildcard-DNS `*.domain` empfohlen).
 - **Abbau**: `python manage.py mandant_abbauen <kürzel> [--daten-loeschen]` stoppt die Instanz und nimmt sie
-  aus dem Reverse Proxy (Status „pausiert“; mit `--daten-loeschen` werden auch Datenbank und Medien
+  aus dem Reverse Proxy (Status „Stillgelegt“; mit `--daten-loeschen` werden auch Datenbank und Medien
   unwiderruflich entfernt, Status „gelöscht“).
 - **Eingabe-Härtung**: Vereinsname, Admin-Daten und Domain landen in `.env` bzw. Caddyfile und werden
   deshalb streng geprüft (keine Zeilenumbrüche/Steuerzeichen, gültiges Domain-Format) – auch wenn der
@@ -64,9 +64,9 @@ Aktuell automatisiert:
   - `python manage.py mandant_dienst <kürzel> stop|start|restart` – Instanz samt Paperless/OpenSlides anhalten,
     wieder starten oder neu starten (Container und Daten bleiben, kein Neubau; gestoppte Instanzen verschwinden
     aus dem Reverse Proxy und kommen beim Starten wieder hinein)
-  - Django-Admin: Aktionen „Bereitstellen“, „Starten“, „Stoppen“, „Neustarten“, „Pausieren“, „Sichern“,
-    „Aktualisieren“ (laufen über Celery). **Stoppen** hält die Container nur an (Status „Gestoppt“), **Pausieren**
-    baut sie ab (Status „Pausiert“, Daten bleiben); **Starten** geht aus beiden Zuständen. Start, Stopp und Neustart gibt es zusätzlich als Schaltflächen direkt
+  - Django-Admin: Aktionen „Bereitstellen“, „Starten“, „Stoppen“, „Neustarten“, „Instanz stilllegen“, „Sichern“,
+    „Aktualisieren“ (laufen über Celery). **Stoppen** hält die Container nur an (Status „Gestoppt“), **Instanz stilllegen**
+    entfernt die Container (Status „Stillgelegt“, Datenbank und Medien bleiben); **Starten** geht aus beiden Zuständen. Start, Stopp und Neustart gibt es zusätzlich als Schaltflächen direkt
     in der Zeile jeder Instanz (nicht passende sind ausgegraut).
 
 **Bewusst nicht enthalten**: Abrechnung/Tarife, Self-Service-Anmeldung für Vereine, automatische
@@ -87,13 +87,13 @@ der Installer ihn auf Wunsch selbst.
 
 Die **Weboberfläche** ist das Django-Admin (`/admin/`, bei gesetzter `PORTAL_DOMAIN` automatisch über Caddy mit
 HTTPS): Die Instanzliste zeigt Status, Version und eine **Live-Erreichbarkeit je Dienst** (grün/rot), die **Version der Portalverwaltung in der Fußzeile**, dazu
-Aktionen zum Bereitstellen, Pausieren, Sichern und Aktualisieren, das Protokoll je Instanz, einen
+Aktionen zum Bereitstellen, Stilllegen, Sichern und Aktualisieren, das Protokoll je Instanz, einen
 **Fortschrittsbalken mit aktuellem Schritt** während der Bereitstellung (aktualisiert sich ohne Neuladen) und die
 Aktionen **„Zugangsdaten des Instanz-Administrators anzeigen“** (nur Superuser; zeigt das Startpasswort) und
 **„Admin-Passwort der Instanz zurücksetzen“** (neues Passwort wird einmalig angezeigt). Die Startseite `/` leitet
 auf `/admin/` um.
 
-**Wartungsseite:** Hat eine Instanz eine Domain, aber keinen laufenden Dienst (neu angelegt, gestoppt, pausiert,
+**Wartungsseite:** Hat eine Instanz eine Domain, aber keinen laufenden Dienst (neu angelegt, gestoppt, stillgelegt,
 fehlgeschlagen, in Bereitstellung) – oder fällt ein laufender Dienst aus –, zeigt Caddy unter dieser Domain (auch
 bei Paperless/OpenSlides) die Seite „Wartungsarbeiten“ mit HTTP 503 statt eines Browserfehlers. Voraussetzung:
 Reverse-Proxy-Automatisierung (`CADDY_ADMIN_URL`) und DNS der Domain auf den Server.

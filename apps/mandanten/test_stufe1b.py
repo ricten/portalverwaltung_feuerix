@@ -271,3 +271,59 @@ class WartungsseiteTests(TestCase):
              override_settings(CADDY_ADMIN_URL="http://127.0.0.1:2019"):
             proxy.proxy_aktualisieren()
         self.assertIn("p.example.org {", op.call_args.args[0].data.decode())
+
+
+class StilllegenTests(TestCase):
+    def _m(self, kuerzel, status="laeuft", **kw):
+        return MandantInstanz.objects.create(kuerzel=kuerzel, verein_name=kuerzel, domain=f"{kuerzel}.example.org",
+                                             status=status, web_port=8100, **kw)
+
+    def test_abbauen_meldet_schritte_und_endet_auf_pausiert(self):
+        from . import provisioning
+        m = self._m("st1", paperless_domain="p.st1.example.org")
+        schritte = []
+        orig = provisioning.basis.fortschritt
+
+        def merken(mandant, prozent, text):
+            schritte.append((mandant.status, prozent))
+            orig(mandant, prozent, text)
+
+        with patch("apps.mandanten.provisioning.basis.fortschritt", side_effect=merken), \
+             patch("apps.mandanten.provisioning.paperless.abbauen"), \
+             patch("apps.mandanten.provisioning.stack_abbauen"), \
+             patch("apps.mandanten.provisioning._proxy_nachziehen"):
+            provisioning.abbauen(m)
+        self.assertEqual([s[1] for s in schritte], [40, 70, 95])
+        self.assertTrue(all(s[0] == "wird_bereitgestellt" for s in schritte))
+        m.refresh_from_db()
+        self.assertEqual(m.status, "pausiert")
+        self.assertEqual(m.get_status_display(), "Stillgelegt (Container entfernt, Daten bleiben)")
+
+    def test_fehler_nach_teilweisem_abbau_markiert_fehlgeschlagen(self):
+        from . import provisioning
+        from .basis import BereitstellungsFehler
+        m = self._m("st2", paperless_domain="p.st2.example.org")
+        with patch("apps.mandanten.provisioning.paperless.abbauen"), \
+             patch("apps.mandanten.provisioning.stack_abbauen", side_effect=BereitstellungsFehler("kaputt")), \
+             patch("apps.mandanten.provisioning.proxy_nachziehen_best_effort"):
+            with self.assertRaises(BereitstellungsFehler):
+                provisioning.abbauen(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "fehlgeschlagen")
+        self.assertIn("Stilllegen fehlgeschlagen bei", m.schritt)
+
+    def test_admin_aktion_stilllegen_merkt_vor_und_startet_task(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.admin.sites import site
+        from django.test import RequestFactory
+        from unittest.mock import MagicMock
+        laeuft, schon = self._m("st3"), self._m("st4", status="pausiert")
+        admin = site._registry[MandantInstanz]
+        request = RequestFactory().post("/")
+        request.user = get_user_model().objects.create_superuser("stu", "s@example.org", "x")
+        request._messages = MagicMock()
+        with patch("apps.mandanten.tasks.mandant_stilllegen_task.delay") as delay:
+            admin.stilllegen(request, MandantInstanz.objects.filter(pk__in=[laeuft.pk, schon.pk]))
+        delay.assert_called_once_with(laeuft.pk)
+        laeuft.refresh_from_db()
+        self.assertEqual(laeuft.status, "wird_bereitgestellt")

@@ -74,7 +74,7 @@ def update_ausrollen(mandant, _pruefen=True):
 
 def stoppen(mandant):
     """Haelt alle Container der Instanz (Feuerix, Paperless, OpenSlides) an - Daten und Container bleiben
-    erhalten - und nimmt sie aus dem Reverse Proxy. Schneller als Pausieren (Abbau) und mit `starten` sofort
+    erhalten - und nimmt sie aus dem Reverse Proxy. Schneller als Stilllegen (Abbau) und mit `starten` sofort
     wieder da. Meldet den Fortschritt (Spalte "Fortschritt")."""
     mandant.status = "wird_bereitgestellt"
     mandant.save(update_fields=["status"])
@@ -134,7 +134,7 @@ def _hochfahren(mandant, aktion, text):
 
 
 def starten(mandant):
-    """Startet eine gestoppte oder pausierte Instanz (ohne Neubau) und traegt sie wieder im Proxy ein."""
+    """Startet eine gestoppte oder stillgelegte Instanz (ohne Neubau) und traegt sie wieder im Proxy ein."""
     _hochfahren(mandant, "start", "starten")
 
 

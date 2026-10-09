@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.17.0 (2026-10-10)
+- „Pausieren“ heißt jetzt **„Instanz stilllegen (Container entfernen, Daten behalten)“**, der Status **„Stillgelegt“**.
+  Das Stilllegen zeigt wie Stoppen/Starten einen Fortschritt (OpenSlides, Paperless, Feuerix entfernen, Reverse Proxy
+  aktualisieren); scheitert ein Schritt, wird die Instanz „Fehlgeschlagen“. Intern bleibt der Statusschlüssel `pausiert`
+  (keine Datenänderung). Migration 0009 (nur die Statusbezeichnung).
+
 ## 0.16.0 (2026-10-10)
 - Neu: **Stoppen** zeigt jetzt wie Starten und Neustart einen Fortschritt in der Spalte „Fortschritt“ (OpenSlides, Paperless,
   Feuerix stoppen, Reverse Proxy aktualisieren). Scheitert das Stoppen, wird die Instanz „Fehlgeschlagen“.

@@ -10,7 +10,7 @@ STATUS = [
     ("laeuft", "Läuft"),
     ("fehlgeschlagen", "Fehlgeschlagen"),
     ("gestoppt", "Gestoppt (Container angehalten)"),
-    ("pausiert", "Pausiert (abgebaut, Daten erhalten)"),
+    ("pausiert", "Stillgelegt (Container entfernt, Daten bleiben)"),
     ("geloescht", "Gelöscht (Daten entfernt)"),
 ]
 

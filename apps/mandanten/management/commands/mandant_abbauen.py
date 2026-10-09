@@ -6,7 +6,7 @@ from apps.mandanten.provisioning import BereitstellungsFehler, abbauen
 
 class Command(BaseCommand):
     help = ("Stoppt eine Mandanten-Instanz und nimmt sie aus dem Reverse Proxy. Ohne --daten-loeschen bleiben "
-           "Datenbank und Medien erhalten (Status 'pausiert', mit mandant_bereitstellen wieder startbar).")
+           "Datenbank und Medien erhalten (Status 'pausiert' = stillgelegt, mit mandant_dienst <kuerzel> start wieder startbar).")
 
     def add_arguments(self, parser):
         parser.add_argument("kuerzel")

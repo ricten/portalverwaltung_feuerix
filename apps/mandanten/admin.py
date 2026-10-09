@@ -49,7 +49,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                        "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "pausieren", "sichern", "aktualisieren",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
@@ -258,7 +258,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"{text} gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
 
-    @admin.action(description="Starten (gestoppte/pausierte Instanz)")
+    @admin.action(description="Starten (gestoppte/stillgelegte Instanz)")
     def starten(self, request, queryset):
         self._steuern(request, queryset, *self.DIENSTE["starten"][:3])
 
@@ -270,9 +270,21 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     def neustarten(self, request, queryset):
         self._steuern(request, queryset, *self.DIENSTE["neustarten"][:3])
 
-    @admin.action(description="Pausieren (Daten bleiben erhalten)")
-    def pausieren(self, request, queryset):
-        self._starten(request, queryset, tasks.mandant_pausieren_task, "Pausieren")
+    @admin.action(description="Instanz stilllegen (Container entfernen, Daten behalten)")
+    def stilllegen(self, request, queryset):
+        gestartet = []
+        for m in queryset:
+            if m.status in ("neu", "geloescht", "pausiert", "wird_bereitgestellt"):
+                self.message_user(request, f"{m.kuerzel}: Stilllegen nicht möglich im Status "
+                                           f"„{m.get_status_display()}“.", messages.WARNING)
+                continue
+            m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
+            m.save(update_fields=["status", "fortschritt", "schritt"])
+            tasks.mandant_stilllegen_task.delay(m.pk)
+            gestartet.append(m.kuerzel)
+        if gestartet:
+            self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
+                                       "„Fortschritt“.", messages.INFO)
 
     @admin.action(description="Datenbank und Medien sichern")
     def sichern(self, request, queryset):

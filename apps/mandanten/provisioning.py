@@ -271,15 +271,35 @@ def bereitstellen(mandant):
 
 
 def abbauen(mandant, daten_loeschen=False):
-    """Stoppt die Instanz samt Zusatzdiensten, nimmt sie aus dem Reverse Proxy und setzt den Status auf
-    "pausiert" (Daten erhalten) bzw. "geloescht" (mit daten_loeschen)."""
+    """Legt die Instanz samt Zusatzdiensten still (Container und Netzwerk werden entfernt, Datenbank und Medien
+    bleiben in den Volumes), nimmt sie aus dem Reverse Proxy und setzt den Status auf "pausiert" (= stillgelegt)
+    bzw. "geloescht" (mit daten_loeschen: Volumes werden mit entfernt). Meldet den Fortschritt."""
+    vorher = mandant.status
+    erledigt = 0   # abgeschlossene Teilschritte: scheitert schon der erste, ist noch nichts entfernt
+    mandant.status = "wird_bereitgestellt"
+    mandant.save(update_fields=["status"])
     try:
-        openslides.abbauen(mandant, daten_loeschen=daten_loeschen)
-        paperless.abbauen(mandant, daten_loeschen=daten_loeschen)
+        if openslides.aktiv(mandant):
+            basis.fortschritt(mandant, 10, "OpenSlides entfernen")
+            openslides.abbauen(mandant, daten_loeschen=daten_loeschen)
+            erledigt += 1
+        if paperless.aktiv(mandant):
+            basis.fortschritt(mandant, 40, "Paperless entfernen")
+            paperless.abbauen(mandant, daten_loeschen=daten_loeschen)
+            erledigt += 1
+        basis.fortschritt(mandant, 70, "Feuerix entfernen")
         stack_abbauen(mandant, daten_loeschen=daten_loeschen)
+        basis.fortschritt(mandant, 95, "Reverse Proxy aktualisieren")
         mandant.status = "geloescht" if daten_loeschen else "pausiert"
-        mandant.save(update_fields=["status"])
+        mandant.fortschritt, mandant.schritt = 0, ""
+        mandant.save(update_fields=["status", "fortschritt", "schritt"])
         _proxy_nachziehen(mandant)
     except BereitstellungsFehler as e:
+        # Nichts entfernt: Instanz laeuft unveraendert weiter. Teilweise entfernt: Zustand unklar -> fehlgeschlagen.
+        mandant.status = vorher if erledigt == 0 else "fehlgeschlagen"
+        mandant.schritt = f"Stilllegen fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.save(update_fields=["status", "schritt"])
         mandant.protokollieren(f"Fehler beim Abbau: {e}")
+        if erledigt:
+            proxy_nachziehen_best_effort(mandant)
         raise
