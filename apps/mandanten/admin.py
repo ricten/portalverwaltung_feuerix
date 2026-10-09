@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from . import betrieb, provisioning, tasks, updates
-from .basis import BereitstellungsFehler
+from .basis import WARTESCHLANGE_UPDATE, BereitstellungsFehler
 from .models import MandantInstanz, UpdateZustand
 
 
@@ -78,6 +78,11 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        name="mandanten_dienst")]
         return eigene + super().get_urls()
 
+    def _update_vormerken(self, m):
+        """Sofort sichtbar machen (Balken), bevor der Worker anfaengt."""
+        m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, WARTESCHLANGE_UPDATE
+        m.save(update_fields=["status", "fortschritt", "schritt"])
+
     def _zurueck(self, request):
         return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:index"))
 
@@ -125,9 +130,10 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             if m is None or m.status != "laeuft":
                 self.message_user(request, "Update nur für laufende Instanzen möglich.", messages.WARNING)
             else:
+                self._update_vormerken(m)
                 tasks.mandant_update_task.delay(m.pk)
                 self.message_user(request, f"Update für {m.kuerzel} gestartet (bei Bedarf mit vorheriger Sicherung) - "
-                                           "Seite in einer Minute neu laden.", messages.INFO)
+                                           "Fortschritt siehe Spalte „Fortschritt“.", messages.INFO)
             return HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
         erlaubt, task, text = self.DIENSTE[aktion][:3]
         self._steuern(request, MandantInstanz.objects.filter(pk=pk), erlaubt, task, text)
@@ -274,7 +280,18 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     @admin.action(description="Auf aktuellen Feuerix-Code aktualisieren")
     def aktualisieren(self, request, queryset):
-        self._starten(request, queryset, tasks.mandant_update_task, "Update")
+        gestartet = []
+        for m in queryset:
+            if m.status != "laeuft":
+                self.message_user(request, f"{m.kuerzel}: Update nur für laufende Instanzen möglich "
+                                           f"(Status: {m.get_status_display()}).", messages.WARNING)
+                continue
+            self._update_vormerken(m)
+            tasks.mandant_update_task.delay(m.pk)
+            gestartet.append(m.kuerzel)
+        if gestartet:
+            self.message_user(request, f"Update gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
+                                       "„Fortschritt“.", messages.INFO)
 
     @admin.action(description="Zugangsdaten des Instanz-Administrators anzeigen")
     def zugangsdaten_anzeigen(self, request, queryset):

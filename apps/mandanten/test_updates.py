@@ -25,9 +25,9 @@ Einleitung.
 """
 
 
-def _m(kuerzel, version, status="laeuft"):
+def _m(kuerzel, version, status="laeuft", **kw):
     return MandantInstanz.objects.create(kuerzel=kuerzel, verein_name=kuerzel, domain=f"{kuerzel}.example.org",
-                                         status=status, web_port=8100, feuerix_version=version)
+                                         status=status, web_port=8100, feuerix_version=version, **kw)
 
 
 def _git_antworten(remote="1.59.0", changelog=CHANGELOG):
@@ -269,8 +269,8 @@ class SicherungVorUpdateTests(TestCase):
         from . import betrieb
         m = _m("s2", "1.58.0")
         reihenfolge = []
-        with patch("apps.mandanten.betrieb.backup", side_effect=lambda x: reihenfolge.append("backup")), \
-             patch("apps.mandanten.betrieb.update_ausrollen", side_effect=lambda x: reihenfolge.append("update")):
+        with patch("apps.mandanten.betrieb.backup", side_effect=lambda x, **kw: reihenfolge.append("backup")), \
+             patch("apps.mandanten.betrieb.update_ausrollen", side_effect=lambda x, **kw: reihenfolge.append("update")):
             betrieb.update_mit_sicherung(m)
         self.assertEqual(reihenfolge, ["backup", "update"])
 
@@ -324,3 +324,81 @@ class EinzelUpdateKnopfTests(TestCase):
         with patch("apps.mandanten.tasks.mandant_update_task.delay") as delay:
             self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/")
         delay.assert_not_called()
+
+
+class UpdateFortschrittTests(TestCase):
+    def _ablauf(self, **kw):
+        """Fuehrt update_mit_sicherung aus (Docker gemockt) und merkt sich die gemeldeten Schritte."""
+        from . import betrieb
+        m = _m("f1", "1.58.0", **kw)
+        schritte = []
+        orig = betrieb.basis.fortschritt
+
+        def merken(mandant, prozent, text):
+            schritte.append((mandant.status, prozent, text))
+            orig(mandant, prozent, text)
+
+        return m, schritte, merken
+
+    def test_status_und_fortschritt_waehrend_des_updates(self):
+        import tempfile
+        from . import betrieb
+        m, schritte, merken = self._ablauf()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.betrieb.basis.fortschritt", side_effect=merken), \
+             patch("apps.mandanten.betrieb.backup"), \
+             patch("apps.mandanten.betrieb.provisioning.stack_hochfahren"), \
+             patch("apps.mandanten.betrieb.provisioning.auf_bereitschaft_warten"), \
+             patch("apps.mandanten.betrieb.provisioning.feuerix_version", return_value="1.59.0"):
+            betrieb.update_mit_sicherung(m)
+        self.assertTrue(all(s[0] == "wird_bereitgestellt" for s in schritte))
+        self.assertEqual([s[1] for s in schritte], [5, 10, 40, 75, 100])
+        m.refresh_from_db()
+        self.assertEqual(m.status, "laeuft")
+        self.assertEqual(m.feuerix_version, "1.59.0")
+        self.assertEqual(m.fortschritt, 100)
+
+    def test_fehler_vor_dem_neustart_laesst_die_instanz_laufen(self):
+        from . import betrieb
+        m = _m("f2", "1.58.0")
+        with patch("apps.mandanten.betrieb.backup", side_effect=BereitstellungsFehler("voll")):
+            with self.assertRaises(BereitstellungsFehler):
+                betrieb.update_mit_sicherung(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "laeuft")
+        self.assertIn("Update fehlgeschlagen bei", m.schritt)
+
+    def test_fehler_nach_dem_neustart_markiert_fehlgeschlagen(self):
+        import tempfile
+        from . import betrieb
+        m = _m("f3", "1.58.0")
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.betrieb.backup"), \
+             patch("apps.mandanten.betrieb.provisioning.stack_hochfahren"), \
+             patch("apps.mandanten.betrieb.provisioning.auf_bereitschaft_warten",
+                   side_effect=BereitstellungsFehler("Zeitüberschreitung")), \
+             patch("apps.mandanten.betrieb.provisioning.proxy_nachziehen_best_effort") as proxy:
+            with self.assertRaises(BereitstellungsFehler):
+                betrieb.update_mit_sicherung(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "fehlgeschlagen")
+        proxy.assert_called_once()
+
+    def test_in_der_warteschlange_vorgemerkte_instanz_wird_angenommen_andere_nicht(self):
+        from . import betrieb
+        from .basis import WARTESCHLANGE_UPDATE
+        vorgemerkt = _m("f4", "1.58.0", status="wird_bereitgestellt", schritt=WARTESCHLANGE_UPDATE)
+        with patch("apps.mandanten.betrieb.update_ausrollen"), patch("apps.mandanten.betrieb.backup"):
+            betrieb.update_mit_sicherung(vorgemerkt)
+        fremd = _m("f5", "1.58.0", status="wird_bereitgestellt", schritt="Feuerix bauen")
+        with self.assertRaises(BereitstellungsFehler):
+            betrieb.update_mit_sicherung(fremd)
+
+    def test_admin_merkt_update_sofort_vor(self):
+        from .basis import WARTESCHLANGE_UPDATE
+        self.client.force_login(get_user_model().objects.create_superuser("fx", "f@example.org", "pw"))
+        m = _m("f6", "1.58.0")
+        with patch("apps.mandanten.tasks.mandant_update_task.delay"):
+            self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/")
+        m.refresh_from_db()
+        self.assertEqual((m.status, m.schritt), ("wird_bereitgestellt", WARTESCHLANGE_UPDATE))

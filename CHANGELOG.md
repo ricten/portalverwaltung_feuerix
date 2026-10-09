@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.15.0 (2026-10-10)
+- Neu: Ein Instanz-Update zeigt seinen **Fortschritt in der Spalte „Fortschritt“** (Balken mit Schritt: Sicherung prüfen,
+  Sicherung anlegen, bauen und starten, auf Migration warten) - beim Einzel-Knopf, der Admin-Aktion und im Gesamt-Rollout.
+  Während des Updates steht die Instanz auf „Wird bereitgestellt“ und danach wieder auf „Läuft“. Scheitert das Update vor
+  dem Neustart (z. B. die Sicherung), läuft die Instanz unverändert weiter; scheitert es danach, wird sie
+  „Fehlgeschlagen“ (Wartungsseite) und der Schritt ist im Balken sichtbar.
+
 ## 0.14.1 (2026-10-10)
 - Installer: bricht bei Start mit `sudo` ab (sonst gehören Dateien und Dienste root) und bietet an, den Besitzer eines
   fremden Feuerix-Checkouts auf den aktuellen Benutzer zu ändern. Hintergrund: Die Update-Prüfung scheiterte mit
