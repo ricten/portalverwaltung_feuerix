@@ -18,8 +18,19 @@ command -v docker >/dev/null || { echo "FEHLER: Docker fehlt."; exit 1; }
 command -v python3 >/dev/null || { echo "FEHLER: python3 fehlt."; exit 1; }
 
 echo "=== Portalverwaltung fuer Feuerix - Installation ==="
-FEUERIX=$(eingabe "Pfad zum Feuerix-Checkout (git clone https://github.com/ricten/Feuerix)" "$DIR/../vereinsverwaltung")
-[ -f "$FEUERIX/docker-compose.yml" ] || { echo "FEHLER: $FEUERIX/docker-compose.yml nicht gefunden."; exit 1; }
+FEUERIX_URL="https://github.com/ricten/Feuerix"
+FEUERIX=$(eingabe "Pfad zum Feuerix-Checkout (wird bei Bedarf von $FEUERIX_URL geklont)" "$DIR/../Feuerix")
+if [ ! -f "$FEUERIX/docker-compose.yml" ]; then
+  echo "Kein Feuerix-Checkout (docker-compose.yml) unter $FEUERIX gefunden."
+  command -v git >/dev/null || { echo "FEHLER: git fehlt - Feuerix manuell nach $FEUERIX klonen."; exit 1; }
+  if [ -e "$FEUERIX" ] && [ -n "$(ls -A "$FEUERIX" 2>/dev/null)" ]; then
+    echo "FEHLER: $FEUERIX existiert und ist nicht leer, enthaelt aber kein Feuerix. Anderen Pfad angeben."; exit 1
+  fi
+  frage "  Feuerix jetzt nach $FEUERIX klonen?" j || { echo "Abbruch."; exit 1; }
+  git clone "$FEUERIX_URL" "$FEUERIX" || { echo "FEHLER: Klonen fehlgeschlagen (privates Repo? Zugangsdaten/SSH-Key pruefen)."; exit 1; }
+  [ -f "$FEUERIX/docker-compose.yml" ] || { echo "FEHLER: $FEUERIX/docker-compose.yml fehlt auch nach dem Klonen."; exit 1; }
+fi
+FEUERIX="$(cd "$FEUERIX" && pwd)"
 
 echo
 echo "Komponenten waehlen:"
