@@ -195,3 +195,24 @@ class DockerUmgebungTests(TestCase):
         self.assertNotIn("POSTGRES_PASSWORD", umgebung)
         self.assertEqual(umgebung["PATH_TEST_BEHALTEN"], "ja")
         self.assertEqual(umgebung["EXTRA"], "1")
+
+
+from django.contrib.auth.models import Permission  # noqa: E402
+
+
+class ZugangsdatenAnzeigenTests(TestCase):
+    def test_nur_superuser_sieht_passwort(self):
+        from django.contrib.auth import get_user_model
+        U = get_user_model()
+        m = MandantInstanz.objects.create(kuerzel="zd-test", verein_name="Test", domain="zd.example.org",
+                                          admin_email="a@example.org", admin_passwort="geheim123")
+        normal = U.objects.create_user("normal", is_staff=True)
+        normal.user_permissions.add(*Permission.objects.filter(content_type__app_label="mandanten"))
+        self.client.force_login(normal)
+        antwort = self.client.post("/admin/mandanten/mandantinstanz/", {
+            "action": "zugangsdaten_anzeigen", "_selected_action": [m.pk]}, follow=True)
+        self.assertNotContains(antwort, "geheim123")
+        self.client.force_login(U.objects.create_superuser("chef", "c@example.org", "pw"))
+        antwort = self.client.post("/admin/mandanten/mandantinstanz/", {
+            "action": "zugangsdaten_anzeigen", "_selected_action": [m.pk]}, follow=True)
+        self.assertContains(antwort, "geheim123")

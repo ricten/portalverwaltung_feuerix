@@ -118,7 +118,8 @@ class AdminAktionTests(TestCase):
             admin.bereitstellen(request, MandantInstanz.objects.all())
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
-        self.assertEqual({"bereitstellen", "pausieren", "sichern", "aktualisieren", "admin_passwort_zuruecksetzen"}, set(admin.actions))
+        self.assertEqual({"bereitstellen", "pausieren", "sichern", "aktualisieren", "zugangsdaten_anzeigen",
+                      "admin_passwort_zuruecksetzen"}, set(admin.actions))
 
 
 @override_settings(PORTAL_DOMAIN="portal.example.org", PORTAL_PORT=8000, PROXY_NUR_HTTP=False)

@@ -47,7 +47,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                        "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren", "admin_passwort_zuruecksetzen"]
+    actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren", "zugangsdaten_anzeigen",
+               "admin_passwort_zuruecksetzen"]
 
     class Media:
         css = {"all": ("mandanten/fortschritt.css",)}
@@ -136,6 +137,22 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     @admin.action(description="Auf aktuellen Feuerix-Code aktualisieren")
     def aktualisieren(self, request, queryset):
         self._starten(request, queryset, tasks.mandant_update_task, "Update")
+
+    @admin.action(description="Zugangsdaten des Instanz-Administrators anzeigen")
+    def zugangsdaten_anzeigen(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(request, "Nur Superuser dürfen Zugangsdaten einsehen.", messages.ERROR)
+            return
+        for m in queryset:
+            if not m.admin_passwort:
+                self.message_user(request, f"{m.kuerzel}: noch kein Passwort erzeugt - zuerst bereitstellen.",
+                                  messages.WARNING)
+                continue
+            m.protokollieren(f"Zugangsdaten angezeigt für {request.user.get_username()}.")
+            self.message_user(
+                request, f"{m.kuerzel}: https://{m.domain}/ - Benutzer „{m.admin_benutzername}“, Passwort: "
+                         f"{m.admin_passwort} (Stand der Bereitstellung; nach einer Änderung in Feuerix selbst "
+                         "bitte „zurücksetzen“ nutzen).", messages.WARNING)
 
     @admin.action(description="Admin-Passwort der Instanz zurücksetzen")
     def admin_passwort_zuruecksetzen(self, request, queryset):

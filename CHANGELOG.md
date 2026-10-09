@@ -4,11 +4,15 @@ Alle nennenswerten Ã„nderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die EintrÃ¤ge bis 0.6.0 wurden nachtrÃ¤glich aus der Git-Historie
 zusammengestellt.
 
+## 0.8.0 (2026-10-09)
+- Neu: Admin-Aktion â€žZugangsdaten des Instanz-Administrators anzeigenâ€œ (nur Superuser, wird im Protokoll
+  vermerkt). Bisher war das Startpasswort einer neuen Instanz nirgends einsehbar.
+
 ## 0.7.1 (2026-10-09)
 - Fix: Die Datenbank-Zugangsdaten der Portalverwaltung (`POSTGRES_USER`/`-PASSWORD`/`-DB` aus deren `.env`) wurden
-  über die Prozessumgebung an `docker compose` durchgereicht und überschrieben dort die der Mandanten-Instanz. Folge:
-  Der Feuerix-Web-Container kam nicht hoch („password authentication failed for user mandant_…“), die
-  Bereitstellung endete bei 35 % mit „Fehlgeschlagen“. Docker-Aufrufe bekommen jetzt eine bereinigte Umgebung.
+  Ã¼ber die Prozessumgebung an `docker compose` durchgereicht und Ã¼berschrieben dort die der Mandanten-Instanz. Folge:
+  Der Feuerix-Web-Container kam nicht hoch (â€žpassword authentication failed for user mandant_â€¦â€œ), die
+  Bereitstellung endete bei 35 % mit â€žFehlgeschlagenâ€œ. Docker-Aufrufe bekommen jetzt eine bereinigte Umgebung.
 
 ## 0.7.0 (2026-10-09)
 - Installer: Fehlt der Feuerix-Checkout, bietet `install.sh` an, ihn automatisch zu klonen (Standardpfad jetzt
