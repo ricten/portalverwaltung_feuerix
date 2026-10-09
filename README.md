@@ -55,6 +55,9 @@ Aktuell automatisiert:
   - **Gesamtlog** (Admin › Gesamtlog): zentrale, nur lesbare Liste aller Ereignisse (Instanz-Protokolle, Aktionen der Benutzer mit
     Namen, Update-Prüfung und Rollout, Backup-Ziel, Mails, Einstellungsänderungen) mit Filter nach Ebene, Quelle und Kategorie
     sowie Suche; Aufbewahrung `LOG_AUFBEWAHRUNG_TAGE` (Standard 90 Tage).
+  - **Versionen von Paperless-ngx und OpenSlides**: Die laufenden Versionen stehen in der Spalte „Version“. Die
+    Update-Prüfung schaut auf GitHub nach neuen Releases und meldet sie (Hinweis im Admin, Gesamtlog, Mail), aktualisiert
+    aber nichts automatisch. Abschalten: `UPDATE_DIENSTE_PRUEFEN=0`.
   - **Online-Check**: `python manage.py mandant_online_check` (vom Installer als systemd-Timer `portal-check.timer`, alle
     5 Minuten) prüft Instanzen und Backup-Ziel, speichert „offline seit“, protokolliert Wechsel und zeigt Ausfälle als roten
     Hinweis im Admin.

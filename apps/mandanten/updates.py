@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from . import basis, benachrichtigung, betrieb, gesamtlog, provisioning
+from . import basis, benachrichtigung, betrieb, dienstversionen, gesamtlog, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz, UpdateZustand
 
@@ -64,6 +64,11 @@ def pruefen():
         zustand.fehler = ""
     except BereitstellungsFehler as e:
         zustand.fehler = str(e)[:1000]
+    if settings.UPDATE_DIENSTE_PRUEFEN:
+        try:
+            dienstversionen.pruefen(zustand)
+        except Exception as e:      # die Dienste-Pruefung darf die Feuerix-Pruefung nie verhindern
+            zustand.dienste_fehler = f"{type(e).__name__}: {e}"[:500]
     zustand.geprueft_am = timezone.now()
     if zustand.fehler and zustand.fehler != vorheriger_fehler:
         gesamtlog.log(f"Update-Prüfung fehlgeschlagen: {zustand.fehler}", kategorie="Update", ebene="fehler")

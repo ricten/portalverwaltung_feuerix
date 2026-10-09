@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.22.0 (2026-10-10)
+- Neu: **Versionen von Paperless-ngx und OpenSlides** werden je Instanz erfasst (Paperless aus dem `X-Version`-Header der
+  laufenden Instanz, OpenSlides aus dem `tag:` der erzeugten `config.yml`) und in der Spalte „Version“ sowie auf der
+  Detailseite angezeigt. Bei der Update-Prüfung (alle `UPDATE_PRUEFUNG_STUNDEN`, Knopf „Erneut prüfen“) fragt das Portal
+  die neuesten stabilen Releases auf GitHub ab (`api.github.com`; abschaltbar mit `UPDATE_DIENSTE_PRUEFEN=0`).
+  Gibt es eine neuere Version, erscheint ein Hinweis im Admin (mit den betroffenen Instanzen), ein Eintrag im Gesamtlog
+  und - falls eingerichtet - eine Mail (je Version einmal). **Es wird nichts automatisch aktualisiert.**
+- Datenbank-Migration 0013.
+
 ## 0.21.0 (2026-10-10)
 - Neu: **Gesamtlog** (Admin › Gesamtlog): eine zentrale, nur lesbare Liste aller Ereignisse mit Zeit, Ebene (Info/Warnung/
   Fehler), Quelle (Instanz oder „Portal“), Kategorie, Text und Benutzer; filter- und durchsuchbar, nach Datum gegliedert.

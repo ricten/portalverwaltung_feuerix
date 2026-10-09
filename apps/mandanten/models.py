@@ -78,6 +78,8 @@ class MandantInstanz(models.Model):
                                        editable=False)
 
     sicherung_am = models.DateTimeField("Letzte erfolgreiche Sicherung", null=True, blank=True, editable=False)
+    paperless_version = models.CharField("Paperless-ngx-Version", max_length=30, blank=True, editable=False)
+    openslides_version = models.CharField("OpenSlides-Version", max_length=30, blank=True, editable=False)
 
     online = models.BooleanField("Erreichbar (letzter Check)", null=True, blank=True, editable=False)
     online_geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True, editable=False)
@@ -149,6 +151,13 @@ class UpdateZustand(models.Model):
     update_mail_version = models.CharField("Version, zu der zuletzt eine Mail ging", max_length=20, blank=True,
                                            editable=False)
 
+    # Zusatzdienste: neueste Versionen laut GitHub (nur Hinweis, kein automatisches Update)
+    paperless_neueste = models.CharField(max_length=30, blank=True, editable=False)
+    openslides_neueste = models.CharField(max_length=30, blank=True, editable=False)
+    dienste_fehler = models.CharField(max_length=500, blank=True, editable=False)
+    paperless_mail_version = models.CharField(max_length=30, blank=True, editable=False)
+    openslides_mail_version = models.CharField(max_length=30, blank=True, editable=False)
+
     class Meta:
         verbose_name = "Update-Zustand"
         verbose_name_plural = "Update-Zustand"
@@ -175,6 +184,26 @@ class UpdateZustand(models.Model):
             return []
         return list(MandantInstanz.objects.filter(status__in=("laeuft", "gestoppt"))
                     .exclude(feuerix_version=self.ziel_version))
+
+    @property
+    def dienste_hinweise(self):
+        """Zusatzdienste mit neuerer Version als auf mindestens einer Instanz:
+        [{"dienst", "name", "neu", "instanzen": [(kuerzel, version), ...]}]"""
+        from .dienstversionen import NAMEN
+        from .updates import versionstupel
+        hinweise = []
+        for dienst in ("paperless", "openslides"):
+            neu = getattr(self, f"{dienst}_neueste")
+            if not versionstupel(neu):
+                continue
+            alt = []
+            for m in MandantInstanz.objects.exclude(status__in=("neu", "geloescht")):
+                v = getattr(m, f"{dienst}_version")
+                if versionstupel(v) and versionstupel(v) < versionstupel(neu):
+                    alt.append((m.kuerzel, v))
+            if alt:
+                hinweise.append({"dienst": dienst, "name": NAMEN[dienst], "neu": neu, "instanzen": alt})
+        return hinweise
 
     @property
     def in_arbeit_instanzen(self):

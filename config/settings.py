@@ -142,6 +142,8 @@ UPDATE_PRUEFUNG_STUNDEN = int(os.environ.get("UPDATE_PRUEFUNG_STUNDEN", "6"))
 UPDATE_BACKUP_MAX_ALTER_STUNDEN = int(os.environ.get("UPDATE_BACKUP_MAX_ALTER_STUNDEN", "24"))
 # Gesamtlog: Eintraege aelter als so viele Tage werden automatisch geloescht (0 = nie).
 LOG_AUFBEWAHRUNG_TAGE = int(os.environ.get("LOG_AUFBEWAHRUNG_TAGE", "90"))
+# Auch Paperless-ngx und OpenSlides: laufende Versionen erfassen und auf GitHub nach neuen Releases schauen (nur Hinweis).
+UPDATE_DIENSTE_PRUEFEN = _bool("UPDATE_DIENSTE_PRUEFEN", "1")
 # Pause zwischen den Instanzen beim Rollout (Sekunden), damit nicht alle gleichzeitig neu bauen.
 UPDATE_PAUSE_SEKUNDEN = int(os.environ.get("UPDATE_PAUSE_SEKUNDEN", "10"))
 # Nur fuer Tests/lokal: reines HTTP ohne Zertifikate (siehe proxy.py).

@@ -47,7 +47,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
-                       "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
+                       "protokoll", "feuerix_version", "paperless_version", "openslides_version",
+                       "erstellt_am", "aktualisiert_am")
     form = MandantForm
     actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
@@ -154,11 +155,28 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         self._steuern(request, MandantInstanz.objects.filter(pk=pk), erlaubt, task, text)
         return HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
 
+    def _mit_diensten(self, obj, zustand, text):
+        """Feuerix-Version plus (kleiner) Paperless-/OpenSlides-Version; veraltete mit Hinweis auf die neue."""
+        from .updates import versionstupel
+        zeilen = []
+        for dienst, name in (("paperless", "Paperless"), ("openslides", "OpenSlides")):
+            v, neu = getattr(obj, f"{dienst}_version"), getattr(zustand, f"{dienst}_neueste")
+            if not v:
+                continue
+            alt = bool(versionstupel(v) and versionstupel(neu) and versionstupel(v) < versionstupel(neu))
+            zeilen.append(format_html('<small{}>{} {}{}</small>', mark_safe(' style="color:#ef6c00"') if alt else "",
+                                      name, v, f" → {neu} verfügbar" if alt else ""))
+        if not zeilen:
+            return text
+        return format_html("{}<br>{}", text, mark_safe("<br>".join(str(z) for z in zeilen)))
+
     @admin.display(description="Version")
     def version_spalte(self, obj):
         """Bereitgestellte Version; bei verfuegbarem Update zusaetzlich ein Knopf zum Aktualisieren dieser Instanz."""
         text = obj.feuerix_version or "-"
-        ziel = UpdateZustand.holen().ziel_version
+        zustand = UpdateZustand.holen()
+        ziel = zustand.ziel_version
+        text = self._mit_diensten(obj, zustand, text)
         if obj.status not in ("laeuft", "gestoppt") or not ziel or obj.feuerix_version == ziel:
             return text
         frage = f"{obj.kuerzel} auf Feuerix {ziel} aktualisieren? Die Instanz ist dabei kurz nicht erreichbar."
@@ -228,7 +246,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         if obj is None:
             return pflichtfelder
         return pflichtfelder + ["web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
-                                "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am"]
+                                "protokoll", "feuerix_version", "paperless_version", "openslides_version",
+                                "erstellt_am", "aktualisiert_am"]
 
     def save_model(self, request, obj, form, change):
         alt = MandantInstanz.objects.filter(pk=obj.pk).first() if change else None
