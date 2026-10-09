@@ -5,6 +5,9 @@
 set -e
 cd "$(dirname "$0")"
 DIR="$(pwd)"
+for f in requirements.txt manage.py config; do
+  [ -e "$f" ] || { echo "FEHLER: $DIR ist unvollstaendig ($f fehlt). Das ganze Repo verwenden: git clone https://github.com/ricten/portalverwaltung_feuerix"; exit 1; }
+done
 
 frage() { # frage "Text" "standard(j|n)"  -> 0 = ja
   local a; read -r -p "$1 [$2] " a; a="${a:-$2}"; [[ "$a" =~ ^[jJyY] ]]
