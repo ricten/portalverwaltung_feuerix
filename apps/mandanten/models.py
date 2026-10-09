@@ -89,6 +89,28 @@ class MandantInstanz(models.Model):
     def docker_projekt(self):
         return f"mandant-{self.kuerzel}"
 
+    @property
+    def letzte_sicherung(self):
+        """Zeitpunkt der neuesten Sicherungsdatei in INSTANZEN_VERZEICHNIS/<kuerzel>/backups (oder None)."""
+        from datetime import datetime, timezone as tz
+        from pathlib import Path
+
+        from django.conf import settings
+        verz = Path(settings.INSTANZEN_VERZEICHNIS) / self.kuerzel / "backups"
+        try:
+            zeiten = [f.stat().st_mtime for f in verz.iterdir() if f.is_file()]
+        except OSError:
+            return None
+        return datetime.fromtimestamp(max(zeiten), tz=tz.utc) if zeiten else None
+
+    @property
+    def sicherung_aktuell(self):
+        from datetime import timedelta
+
+        from django.conf import settings
+        letzte = self.letzte_sicherung
+        return bool(letzte and timezone.now() - letzte <= timedelta(hours=settings.UPDATE_BACKUP_MAX_ALTER_STUNDEN))
+
     def protokollieren(self, text):
         zeile = f"[{timezone.now():%d.%m.%Y %H:%M:%S}] {text}"
         self.protokoll = (self.protokoll + "\n" + zeile).strip()

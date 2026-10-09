@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.14.0 (2026-10-10)
+- Neu: In der Spalte **Version** der Instanzliste erscheint bei verfügbarem Update ein Knopf (↑ → Zielversion), der
+  nur diese Instanz aktualisiert.
+- Neu: **Sicherungsprüfung vor jedem Update** (Einzel-Knopf, Admin-Aktion und Gesamt-Rollout): Ist die letzte Sicherung
+  der Instanz älter als `UPDATE_BACKUP_MAX_ALTER_STUNDEN` (Standard 24) oder fehlt sie, legt das Portal vorher
+  automatisch eine an. Schlägt die Sicherung fehl, wird diese Instanz nicht aktualisiert. Der Update-Hinweis zeigt je
+  Instanz, ob die Sicherung aktuell ist.
+- Die Kommandos `mandant_update` (ohne Prüfung) und `mandant_update_pruefen --ausrollen` (mit Prüfung) bleiben getrennt.
+
 ## 0.13.0 (2026-10-10)
 - Neu: **Update-Prüfung für Feuerix.** Das Portal prüft im Hintergrund (alle `UPDATE_PRUEFUNG_STUNDEN`, Standard 6,
   sobald jemand das Admin öffnet; 0 = aus) per `git fetch`, ob der Feuerix-Code eine neuere Version hat, und zeigt auf

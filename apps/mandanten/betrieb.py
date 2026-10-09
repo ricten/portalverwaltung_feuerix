@@ -122,6 +122,19 @@ def neustarten(mandant):
     _hochfahren(mandant, "restart", "neu starten")
 
 
+def update_mit_sicherung(mandant):
+    """Prueft vor dem Update, ob eine aktuelle Sicherung existiert (UPDATE_BACKUP_MAX_ALTER_STUNDEN), legt bei
+    Bedarf eine an und aktualisiert erst danach. Schlaegt die Sicherung fehl, wird NICHT aktualisiert."""
+    if not mandant.sicherung_aktuell:
+        mandant.protokollieren("Keine aktuelle Sicherung vorhanden - lege vor dem Update eine an.")
+        try:
+            backup(mandant)
+        except BereitstellungsFehler as e:
+            mandant.protokollieren(f"Update abgebrochen: Sicherung fehlgeschlagen ({e})")
+            raise BereitstellungsFehler(f"Sicherung vor dem Update fehlgeschlagen: {e}")
+    update_ausrollen(mandant)
+
+
 def alle_aktualisieren(pause_sekunden=10, git_pull=False):
     """Rollt das Update nacheinander auf alle laufenden Instanzen aus (gestaffelt, ein Fehler stoppt die
     anderen nicht). -> (erfolgreich, {kuerzel: Fehlertext})"""

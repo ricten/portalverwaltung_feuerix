@@ -29,3 +29,4 @@
 .pv-update-haupt { background: #2e7d32; border-color: #2e7d32; color: #fff; font-weight: 600; }
 .pv-update-haupt:hover { background: #276a2b; }
 .pv-update-ergebnis { font-size: 12px; color: #555; }
+.pv-update-einzeln { width: 24px; height: 24px; background: #1565c0; vertical-align: middle; margin-left: 4px; }

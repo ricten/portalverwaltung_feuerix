@@ -14,12 +14,12 @@
     </strong>
     {% with veraltet=update.veraltete_instanzen %}
       {% if veraltet %}<div class="pv-update-liste">Zu aktualisieren:
-        {% for m in veraltet %}<span class="pv-chip">{{ m.kuerzel }} <small>({{ m.feuerix_version|default:"?" }})</small></span>{% endfor %}
+        {% for m in veraltet %}<span class="pv-chip">{{ m.kuerzel }} <small>({{ m.feuerix_version|default:"?" }}) · {% if m.sicherung_aktuell %}Sicherung aktuell{% else %}Sicherung wird vorher angelegt{% endif %}</small></span>{% endfor %}
       </div>{% endif %}
     {% endwith %}
     {% if update.aenderungen %}<details><summary>Änderungen anzeigen</summary><pre>{{ update.aenderungen }}</pre></details>{% endif %}
     <div class="pv-update-aktionen">
-      <form method="post" action="{% url 'admin:mandanten_update_ausrollen' %}" onsubmit="return confirm('Update jetzt nacheinander auf alle genannten Instanzen ausrollen? Jede Instanz ist dabei kurz nicht erreichbar.');">{% csrf_token %}
+      <form method="post" action="{% url 'admin:mandanten_update_ausrollen' %}" onsubmit="return confirm('Update jetzt nacheinander auf alle genannten Instanzen ausrollen? Jede Instanz ist dabei kurz nicht erreichbar. Fehlende oder veraltete Sicherungen werden vorher automatisch angelegt.');">{% csrf_token %}
         <button class="pv-update-knopf pv-update-haupt" type="submit">Update jetzt ausrollen</button>
       </form>
       <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Erneut prüfen</button></form>

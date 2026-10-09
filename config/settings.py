@@ -137,6 +137,9 @@ PORTAL_PORT = int(os.environ.get("PORTAL_PORT", "8000"))
 # Update-Pruefung fuer Feuerix: so oft (Stunden) prueft das Portal im Hintergrund auf eine neuere Version,
 # sobald jemand die Weboberflaeche oeffnet (0 = aus). Den Rollout startet immer ein Mensch.
 UPDATE_PRUEFUNG_STUNDEN = int(os.environ.get("UPDATE_PRUEFUNG_STUNDEN", "6"))
+# Vor einem Update muss eine Sicherung der Instanz juenger als so viele Stunden sein - sonst legt das Portal
+# automatisch eine an (schlaegt sie fehl, wird die Instanz nicht aktualisiert).
+UPDATE_BACKUP_MAX_ALTER_STUNDEN = int(os.environ.get("UPDATE_BACKUP_MAX_ALTER_STUNDEN", "24"))
 # Pause zwischen den Instanzen beim Rollout (Sekunden), damit nicht alle gleichzeitig neu bauen.
 UPDATE_PAUSE_SEKUNDEN = int(os.environ.get("UPDATE_PAUSE_SEKUNDEN", "10"))
 # Nur fuer Tests/lokal: reines HTTP ohne Zertifikate (siehe proxy.py).

@@ -48,7 +48,7 @@ def mandant_backup_task(mandant_id):
 
 @shared_task
 def mandant_update_task(mandant_id):
-    _ausfuehren(betrieb.update_ausrollen, mandant_id, protokollieren=True)
+    _ausfuehren(betrieb.update_mit_sicherung, mandant_id, protokollieren=True)
 
 
 @shared_task

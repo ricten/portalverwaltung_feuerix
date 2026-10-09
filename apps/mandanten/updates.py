@@ -115,9 +115,10 @@ def ausrollen(pause_sekunden=None):
         ziele = list(MandantInstanz.objects.filter(status="laeuft").exclude(feuerix_version=version))
         ok, fehler = [], {}
         for nr, mandant in enumerate(ziele, 1):
-            schritt(f"Instanz {nr} von {len(ziele)}: {mandant.kuerzel}")
+            schritt(f"Instanz {nr} von {len(ziele)}: {mandant.kuerzel}"
+                   + ("" if mandant.sicherung_aktuell else " (Sicherung, dann Update)"))
             try:
-                betrieb.update_ausrollen(mandant)
+                betrieb.update_mit_sicherung(mandant)
                 ok.append(mandant.kuerzel)
             except BereitstellungsFehler as e:
                 fehler[mandant.kuerzel] = str(e).splitlines()[0][:200]

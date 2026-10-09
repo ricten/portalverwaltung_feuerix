@@ -104,7 +104,7 @@ class RolloutTests(TestCase):
 
         with patch("apps.mandanten.updates._git", side_effect=git), \
              patch("apps.mandanten.provisioning.feuerix_version", side_effect=lambda: version["wert"]), \
-             patch("apps.mandanten.updates.betrieb.update_ausrollen", **kw) as ausrollen:
+             patch("apps.mandanten.updates.betrieb.update_mit_sicherung", **kw) as ausrollen:
             ergebnis = updates.ausrollen(pause_sekunden=0)
         return ergebnis, ausrollen, befehle
 
@@ -135,7 +135,7 @@ class RolloutTests(TestCase):
 
         with patch("apps.mandanten.updates._git", side_effect=git), \
              patch("apps.mandanten.provisioning.feuerix_version", return_value="1.58.0"), \
-             patch("apps.mandanten.updates.betrieb.update_ausrollen") as ausrollen:
+             patch("apps.mandanten.updates.betrieb.update_mit_sicherung") as ausrollen:
             updates.ausrollen(pause_sekunden=0)
         self.assertNotIn(["pull", "--ff-only"], befehle)
         ausrollen.assert_called_once()   # die Instanz war trotzdem veraltet
@@ -238,4 +238,89 @@ class AutomatischePruefungTests(TestCase):
     def test_ausgeschaltet(self):
         with patch("apps.mandanten.tasks.update_pruefen_task.delay") as delay:
             updates.fuer_anzeige()
+        delay.assert_not_called()
+
+
+class SicherungVorUpdateTests(TestCase):
+    def _sicherung_anlegen(self, tmp, kuerzel, alter_stunden):
+        import os
+        import time
+        from pathlib import Path
+        verz = Path(tmp) / kuerzel / "backups"
+        verz.mkdir(parents=True)
+        datei = verz / "db.sql"
+        datei.write_text("x")
+        zeit = time.time() - alter_stunden * 3600
+        os.utime(datei, (zeit, zeit))
+
+    def test_letzte_sicherung_und_aktualitaet(self):
+        import tempfile
+        m = _m("s1", "1.58.0")
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp):
+            self.assertIsNone(m.letzte_sicherung)
+            self.assertFalse(m.sicherung_aktuell)
+            self._sicherung_anlegen(tmp, "s1", alter_stunden=2)
+            self.assertTrue(m.sicherung_aktuell)
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp):
+            self._sicherung_anlegen(tmp, "s1", alter_stunden=48)
+            self.assertFalse(m.sicherung_aktuell)
+
+    def test_ohne_aktuelle_sicherung_wird_erst_gesichert_dann_aktualisiert(self):
+        from . import betrieb
+        m = _m("s2", "1.58.0")
+        reihenfolge = []
+        with patch("apps.mandanten.betrieb.backup", side_effect=lambda x: reihenfolge.append("backup")), \
+             patch("apps.mandanten.betrieb.update_ausrollen", side_effect=lambda x: reihenfolge.append("update")):
+            betrieb.update_mit_sicherung(m)
+        self.assertEqual(reihenfolge, ["backup", "update"])
+
+    def test_mit_aktueller_sicherung_keine_neue(self):
+        import tempfile
+        from . import betrieb
+        m = _m("s3", "1.58.0")
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp):
+            self._sicherung_anlegen(tmp, "s3", alter_stunden=1)
+            with patch("apps.mandanten.betrieb.backup") as backup, \
+                 patch("apps.mandanten.betrieb.update_ausrollen") as update:
+                betrieb.update_mit_sicherung(m)
+        backup.assert_not_called()
+        update.assert_called_once()
+
+    def test_fehlgeschlagene_sicherung_verhindert_das_update(self):
+        from . import betrieb
+        m = _m("s4", "1.58.0")
+        with patch("apps.mandanten.betrieb.backup", side_effect=BereitstellungsFehler("Platte voll")), \
+             patch("apps.mandanten.betrieb.update_ausrollen") as update:
+            with self.assertRaises(BereitstellungsFehler):
+                betrieb.update_mit_sicherung(m)
+        update.assert_not_called()
+        m.refresh_from_db()
+        self.assertIn("Update abgebrochen", m.protokoll)
+
+
+class EinzelUpdateKnopfTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_superuser("e", "e@example.org", "pw"))
+
+    def test_knopf_nur_bei_veralteter_laufender_instanz(self):
+        UpdateZustand.objects.update_or_create(pk=1, defaults=dict(lokale_version="1.58.0", remote_version="1.59.0"))
+        veraltet = _m("alt", "1.58.0")
+        _m("neu", "1.59.0")
+        _m("aus", "1.58.0", status="gestoppt")
+        html = self.client.get("/admin/mandanten/mandantinstanz/").content.decode()
+        self.assertIn(f"/{veraltet.pk}/dienst/aktualisieren/", html)
+        self.assertEqual(html.count("/dienst/aktualisieren/"), 1)
+        self.assertIn("→ 1.59.0", html)
+
+    def test_klick_startet_update_task(self):
+        m = _m("k", "1.58.0")
+        url = f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/"
+        with patch("apps.mandanten.tasks.mandant_update_task.delay") as delay:
+            self.assertEqual(self.client.post(url).status_code, 302)
+        delay.assert_called_once_with(m.pk)
+
+    def test_klick_bei_nicht_laufender_instanz_tut_nichts(self):
+        m = _m("g", "1.58.0", status="gestoppt")
+        with patch("apps.mandanten.tasks.mandant_update_task.delay") as delay:
+            self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/")
         delay.assert_not_called()

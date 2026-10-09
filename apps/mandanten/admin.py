@@ -43,7 +43,7 @@ class MandantForm(forms.ModelForm):
 @admin.register(MandantInstanz)
 class MandantInstanzAdmin(admin.ModelAdmin):
     list_display = ("kuerzel", "verein_name", "domain", "status", "fortschrittsbalken", "erreichbarkeit",
-                    "steuerung", "feuerix_version", "erstellt_am")
+                    "steuerung", "version_spalte", "erstellt_am")
     list_filter = ("status",)
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
@@ -118,11 +118,37 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         """Ziel der Schaltflaechen in der Instanzliste (nur POST, braucht Aenderungsrecht)."""
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
-        if not self.has_change_permission(request) or aktion not in self.DIENSTE:
+        if not self.has_change_permission(request) or (aktion not in self.DIENSTE and aktion != "aktualisieren"):
             raise PermissionDenied
+        if aktion == "aktualisieren":
+            m = MandantInstanz.objects.filter(pk=pk).first()
+            if m is None or m.status != "laeuft":
+                self.message_user(request, "Update nur für laufende Instanzen möglich.", messages.WARNING)
+            else:
+                tasks.mandant_update_task.delay(m.pk)
+                self.message_user(request, f"Update für {m.kuerzel} gestartet (bei Bedarf mit vorheriger Sicherung) - "
+                                           "Seite in einer Minute neu laden.", messages.INFO)
+            return HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
         erlaubt, task, text = self.DIENSTE[aktion][:3]
         self._steuern(request, MandantInstanz.objects.filter(pk=pk), erlaubt, task, text)
         return HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
+
+    @admin.display(description="Version")
+    def version_spalte(self, obj):
+        """Bereitgestellte Version; bei verfuegbarem Update zusaetzlich ein Knopf zum Aktualisieren dieser Instanz."""
+        text = obj.feuerix_version or "-"
+        ziel = UpdateZustand.holen().ziel_version
+        if obj.status != "laeuft" or not ziel or obj.feuerix_version == ziel:
+            return text
+        frage = f"{obj.kuerzel} auf Feuerix {ziel} aktualisieren? Die Instanz ist dabei kurz nicht erreichbar."
+        frage += (" Die letzte Sicherung ist aktuell." if obj.sicherung_aktuell
+                  else " Es gibt keine aktuelle Sicherung - sie wird vorher automatisch angelegt.")
+        return format_html(
+            '<span>{}</span> <button type="button" class="pv-knopf pv-update-einzeln" data-url="{}" '
+            'data-frage="{}" title="Auf {} aktualisieren" aria-label="Aktualisieren">'
+            '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" '
+            'd="M12 3l-8 8h5v9h6v-9h5z"/></svg></button> <small>→ {}</small>',
+            text, reverse("admin:mandanten_dienst", args=[obj.pk, "aktualisieren"]), frage, ziel, ziel)
 
     @admin.display(description="Steuerung")
     def steuerung(self, obj):
