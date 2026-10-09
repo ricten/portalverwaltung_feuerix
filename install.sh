@@ -17,6 +17,7 @@ eingabe() { # eingabe "Text" "standard" -> stdout
 }
 zufall() { python3 -c "import secrets,string;print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range($1)))"; }
 
+[ "$(id -u)" != 0 ] || { echo "FEHLER: Bitte ohne sudo starten (./install.sh) - sonst gehoeren Dateien und Dienste root. sudo ruft das Skript selbst auf, wo noetig."; exit 1; }
 command -v docker >/dev/null || { echo "FEHLER: Docker fehlt."; exit 1; }
 command -v python3 >/dev/null || { echo "FEHLER: python3 fehlt."; exit 1; }
 
@@ -34,6 +35,11 @@ if [ ! -f "$FEUERIX/docker-compose.yml" ]; then
   [ -f "$FEUERIX/docker-compose.yml" ] || { echo "FEHLER: $FEUERIX/docker-compose.yml fehlt auch nach dem Klonen."; exit 1; }
 fi
 FEUERIX="$(cd "$FEUERIX" && pwd)"
+# Die Portal-Dienste laufen als dieser Benutzer und brauchen Schreibrechte im Feuerix-Checkout (git fetch/pull).
+if [ "$(stat -c %U "$FEUERIX")" != "$(id -un)" ]; then
+  echo "Hinweis: $FEUERIX gehoert $(stat -c %U "$FEUERIX"), die Dienste laufen aber als $(id -un) (git-Update braucht Rechte)."
+  frage "  Besitzer auf $(id -un) aendern (sudo chown -R)?" j && sudo chown -R "$(id -un):$(id -gn)" "$FEUERIX"
+fi
 
 echo
 echo "Komponenten waehlen:"

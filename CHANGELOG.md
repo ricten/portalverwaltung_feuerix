@@ -4,6 +4,11 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.14.1 (2026-10-10)
+- Installer: bricht bei Start mit `sudo` ab (sonst gehören Dateien und Dienste root) und bietet an, den Besitzer eines
+  fremden Feuerix-Checkouts auf den aktuellen Benutzer zu ändern. Hintergrund: Die Update-Prüfung scheiterte mit
+  „dubiose Besitzverhältnisse im Repository“, weil `/opt/Feuerix` root gehörte.
+
 ## 0.14.0 (2026-10-10)
 - Neu: In der Spalte **Version** der Instanzliste erscheint bei verfügbarem Update ein Knopf (↑ → Zielversion), der
   nur diese Instanz aktualisiert.
