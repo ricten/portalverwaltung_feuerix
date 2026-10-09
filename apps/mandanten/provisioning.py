@@ -22,7 +22,7 @@ from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.exceptions import ValidationError
 
-from . import basis, openslides, paperless, proxy
+from . import basis, dienstversionen, openslides, paperless, proxy
 from .basis import BereitstellungsFehler, docker, instanz_verzeichnis
 from .validatoren import gueltige_domain, keine_env_sonderzeichen
 
@@ -268,6 +268,7 @@ def bereitstellen(mandant):
         mandant.feuerix_version = feuerix_version()
         mandant.save(update_fields=["status", "feuerix_version"])
         _proxy_nachziehen(mandant)
+        dienstversionen.erfassen_sicher(mandant)
         basis.fortschritt(mandant, 100, "Fertig")
     except BereitstellungsFehler as e:
         mandant.status = "fehlgeschlagen"
@@ -278,26 +279,37 @@ def bereitstellen(mandant):
         raise
 
 
-def abbauen(mandant, daten_loeschen=False):
+def abbauen(mandant, daten_loeschen=False, sicherung=True):
     """Legt die Instanz samt Zusatzdiensten still (Container und Netzwerk werden entfernt, Datenbank und Medien
     bleiben in den Volumes), nimmt sie aus dem Reverse Proxy und setzt den Status auf "pausiert" (= stillgelegt)
-    bzw. "geloescht" (mit daten_loeschen: Volumes werden mit entfernt). Meldet den Fortschritt."""
-    vorher = mandant.status
+    bzw. "geloescht" (mit daten_loeschen: Volumes werden mit entfernt). Meldet den Fortschritt.
+    Mit `daten_loeschen` wird VORHER eine Abschlusssicherung aller Dienste angelegt (endsicherung); scheitert sie, wird
+    nichts entfernt. `sicherung=False` ueberspringt sie ausdruecklich (nur fuer Notfaelle, z. B. Kommandozeile)."""
+    vorher = basis.status_vor_vormerkung(mandant)
     erledigt = 0   # abgeschlossene Teilschritte: scheitert schon der erste, ist noch nichts entfernt
     mandant.status = "wird_bereitgestellt"
     mandant.save(update_fields=["status"])
+    schritte = (65, 75, 85, 95) if daten_loeschen else (10, 40, 70, 95)
     try:
+        if daten_loeschen and sicherung:
+            from . import endsicherung
+            endsicherung.abschlusssicherung(mandant)
+        elif daten_loeschen:
+            mandant.protokollieren("ACHTUNG: Daten werden OHNE Abschlusssicherung gelöscht.")
         if openslides.aktiv(mandant):
-            basis.fortschritt(mandant, 10, "OpenSlides entfernen")
+            basis.fortschritt(mandant, schritte[0], "OpenSlides entfernen")
             openslides.abbauen(mandant, daten_loeschen=daten_loeschen)
             erledigt += 1
         if paperless.aktiv(mandant):
-            basis.fortschritt(mandant, 40, "Paperless entfernen")
+            basis.fortschritt(mandant, schritte[1], "Paperless entfernen")
             paperless.abbauen(mandant, daten_loeschen=daten_loeschen)
             erledigt += 1
-        basis.fortschritt(mandant, 70, "Feuerix entfernen")
+        basis.fortschritt(mandant, schritte[2], "Feuerix entfernen")
         stack_abbauen(mandant, daten_loeschen=daten_loeschen)
-        basis.fortschritt(mandant, 95, "Reverse Proxy aktualisieren")
+        if daten_loeschen:
+            from . import endsicherung
+            endsicherung.archivieren(mandant)
+        basis.fortschritt(mandant, schritte[3], "Reverse Proxy aktualisieren")
         mandant.status = "geloescht" if daten_loeschen else "pausiert"
         mandant.fortschritt, mandant.schritt = 0, ""
         mandant.save(update_fields=["status", "fortschritt", "schritt"])
@@ -305,7 +317,8 @@ def abbauen(mandant, daten_loeschen=False):
     except BereitstellungsFehler as e:
         # Nichts entfernt: Instanz laeuft unveraendert weiter. Teilweise entfernt: Zustand unklar -> fehlgeschlagen.
         mandant.status = vorher if erledigt == 0 else "fehlgeschlagen"
-        mandant.schritt = f"Stilllegen fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.schritt = (f"{'Löschen' if daten_loeschen else 'Stilllegen'} fehlgeschlagen bei: "
+                           f"{mandant.schritt}")[:200]
         mandant.save(update_fields=["status", "schritt"])
         mandant.protokollieren(f"Fehler beim Abbau: {e}")
         if erledigt:

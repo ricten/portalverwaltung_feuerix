@@ -1,5 +1,6 @@
 """Gemeinsame Bausteine fuer Bereitstellung von Feuerix und Zusatzdiensten (Paperless, OpenSlides)."""
 import os
+import re
 import secrets
 import socket
 import string
@@ -108,6 +109,23 @@ def yaml_pfad(pfad):
 
 def url_schema():
     return "http" if settings.PROXY_NUR_HTTP else "https"
+
+
+def status_vor_vormerkung(mandant):
+    """Der echte Status vor einer im Admin vorgemerkten Aktion (steht im Schritt als "(vorher: laeuft)"), sonst der
+    aktuelle. Damit eine fehlgeschlagene Aktion die Instanz nicht auf "In Arbeit" haengen laesst."""
+    if mandant.status == "wird_bereitgestellt":
+        treffer = re.search(r"\(vorher: (\w+)\)$", mandant.schritt)
+        if treffer:
+            return treffer.group(1)
+    return mandant.status
+
+
+def vormerken(mandant, text):
+    """Setzt die Instanz sofort auf "In Arbeit" (Balken im Admin) und merkt sich den bisherigen Status."""
+    vorher = status_vor_vormerkung(mandant)
+    mandant.status, mandant.fortschritt, mandant.schritt = "wird_bereitgestellt", 0, f"{text} (vorher: {vorher})"
+    mandant.save(update_fields=["status", "fortschritt", "schritt"])
 
 
 def fortschritt(mandant, prozent, schritt):

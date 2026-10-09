@@ -199,7 +199,7 @@ class AbbauenTests(TestCase):
             m = self._laufende_instanz(tmp)
             with patch("apps.mandanten.basis.subprocess.run", return_value=_ok()) as run, \
                  patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=True):
-                provisioning.abbauen(m, daten_loeschen=True)
+                provisioning.abbauen(m, daten_loeschen=True, sicherung=False)
         self.assertIn("-v", run.call_args.args[0])
         m.refresh_from_db()
         self.assertEqual(m.status, "geloescht")

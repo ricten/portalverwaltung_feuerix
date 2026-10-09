@@ -66,22 +66,34 @@ def openslides_konfiguriert(mandant):
     return treffer.group(1).lstrip("vV")[:30] if treffer else ""
 
 
+def erfassen(mandant):
+    """Aktualisiert paperless_version/openslides_version einer Instanz (nur wenn der Dienst eingerichtet ist)."""
+    geaendert = []
+    if mandant.paperless_domain and mandant.status in ("laeuft", "wird_bereitgestellt"):
+        v = paperless_laufend(mandant)
+        if v and v != mandant.paperless_version:
+            mandant.paperless_version = v
+            geaendert.append("paperless_version")
+    if mandant.openslides_domain:
+        v = openslides_konfiguriert(mandant)
+        if v and v != mandant.openslides_version:
+            mandant.openslides_version = v
+            geaendert.append("openslides_version")
+    if geaendert:
+        mandant.save(update_fields=geaendert)
+
+
+def erfassen_sicher(mandant):
+    """Wie `erfassen`, aber nie mit Ausnahme: fuer das Ende von Bereitstellung/Start, wo es nur ein Zusatz ist."""
+    try:
+        erfassen(mandant)
+    except Exception:
+        pass
+
+
 def instanzen_erfassen():
-    """Aktualisiert paperless_version/openslides_version der Instanzen (nur wenn der Dienst eingerichtet ist)."""
     for m in MandantInstanz.objects.exclude(status__in=("neu", "geloescht")):
-        geaendert = []
-        if m.paperless_domain and m.status == "laeuft":
-            v = paperless_laufend(m)
-            if v and v != m.paperless_version:
-                m.paperless_version = v
-                geaendert.append("paperless_version")
-        if m.openslides_domain:
-            v = openslides_konfiguriert(m)
-            if v and v != m.openslides_version:
-                m.openslides_version = v
-                geaendert.append("openslides_version")
-        if geaendert:
-            m.save(update_fields=geaendert)
+        erfassen(m)
 
 
 def pruefen(zustand):

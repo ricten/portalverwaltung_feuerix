@@ -210,6 +210,19 @@ class UpdateZustand(models.Model):
         return hinweise
 
     @property
+    def dienste_unbekannt(self):
+        """Laufende Instanzen mit Paperless/OpenSlides, deren Version (noch) nicht ermittelt werden konnte:
+        [(Dienstname, [kuerzel, ...])] - Hinweis fuer die Anzeige, damit eine fehlende Version nicht stumm bleibt."""
+        ergebnis = []
+        for name, domain, version in (("Paperless-ngx", "paperless_domain", "paperless_version"),
+                                      ("OpenSlides", "openslides_domain", "openslides_version")):
+            kuerzel = [m.kuerzel for m in MandantInstanz.objects.filter(status="laeuft").exclude(**{domain: ""})
+                       if not getattr(m, version)]
+            if kuerzel:
+                ergebnis.append((name, kuerzel))
+        return ergebnis
+
+    @property
     def in_arbeit_instanzen(self):
         """Instanzen, die gerade starten, stoppen, aktualisiert oder bereitgestellt werden - solange sind Updates
         nicht moeglich und der Update-Status nicht verlaesslich."""

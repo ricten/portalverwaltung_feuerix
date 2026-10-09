@@ -48,6 +48,11 @@ def dienst_update_task(mandant_id, dienst):
 
 
 @shared_task
+def mandant_loeschen_task(mandant_id):
+    _ausfuehren(lambda m: abbauen(m, daten_loeschen=True), mandant_id, protokollieren=False)
+
+
+@shared_task
 def mandant_backup_task(mandant_id):
     _ausfuehren(betrieb.backup, mandant_id, protokollieren=True)
 

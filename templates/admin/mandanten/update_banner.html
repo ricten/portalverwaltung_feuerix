@@ -54,3 +54,13 @@
   <div class="pv-update-ergebnis">Aktualisiert wird nicht automatisch: Starten Sie das Update je Instanz mit dem Pfeil-Knopf in der Spalte „Version“ (vorher wird eine Sicherung angelegt).</div>
 </div>
 {% endif %}{% endwith %}{% endif %}
+{% if update %}{% with unbekannt=update.dienste_unbekannt %}{% if unbekannt or update.dienste_fehler %}
+<div class="pv-update">
+  {% for name, kuerzel in unbekannt %}
+  <div class="pv-update-liste"><strong>{{ name }}-Version nicht ermittelt</strong> bei:
+    {% for k in kuerzel %}<span class="pv-chip">{{ k }}</span>{% endfor %}
+    – die Prüfung läuft automatisch; mit „Erneut prüfen“ sofort. Bleibt es dabei, antwortet der Dienst nicht oder liefert keine Versionsangabe.</div>
+  {% endfor %}
+  {% if update.dienste_fehler %}<div class="pv-update-ergebnis">Prüfung der Zusatzdienste: {{ update.dienste_fehler }}</div>{% endif %}
+</div>
+{% endif %}{% endwith %}{% endif %}

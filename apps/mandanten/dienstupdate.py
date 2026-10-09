@@ -20,12 +20,36 @@ def _schritt(mandant, prozent, text):
     basis.fortschritt(mandant, prozent, text)
 
 
+def paperless_export(mandant, bezeichnung="Paperless: Export vor dem Update"):
+    """Exportiert alle Dokumente und Metadaten mit `document_exporter` in den Ordner export der Instanz."""
+    befehl, cwd = paperless._compose_basis(mandant)
+    basis.docker(befehl + ["exec", "-T", "webserver", "document_exporter", "../export"],
+                 bezeichnung, timeout=7200, cwd=cwd)
+    pfad = paperless._verzeichnis(mandant) / "export"
+    mandant.protokollieren(f"Paperless-Export angelegt in {pfad}.")
+    return pfad
+
+
+def openslides_dump(mandant, markierung, bezeichnung="OpenSlides: Datenbank-Dump vor dem Update"):
+    """Sichert die OpenSlides-Datenbank als SQL-Dump nach `<instanz>/openslides/backups`. Wirft einen Fehler, wenn der
+    Dump fehlschlaegt oder leer ist."""
+    verz = openslides._verzeichnis(mandant)
+    dump = basis.docker(["docker", "compose", "exec", "-T", "postgres", "pg_dump", "-U", "openslides", "-d", "openslides"],
+                        bezeichnung, timeout=3600, cwd=verz, env=openslides._env(mandant))
+    if not dump.strip():
+        raise BereitstellungsFehler("OpenSlides: Datenbank-Dump ist leer - abgebrochen.")
+    ziel = verz / "backups"
+    ziel.mkdir(exist_ok=True)
+    datei = ziel / f"openslides-{markierung}-{datetime.now():%Y%m%d-%H%M%S}.sql"
+    datei.write_text(dump, encoding="utf-8")
+    mandant.protokollieren(f"OpenSlides-Datenbank gesichert in {datei}.")
+    return datei
+
+
 def paperless_aktualisieren(mandant):
     befehl, cwd = paperless._compose_basis(mandant)
     _schritt(mandant, 20, "Paperless: Export anlegen (Sicherung)")
-    basis.docker(befehl + ["exec", "-T", "webserver", "document_exporter", "../export"],
-                 "Paperless: Export vor dem Update", timeout=7200, cwd=cwd)
-    mandant.protokollieren(f"Paperless-Export angelegt in {paperless._verzeichnis(mandant) / 'export'}.")
+    paperless_export(mandant)
     _schritt(mandant, 45, "Paperless: neues Image laden")
     basis.docker(befehl + ["pull"], "Paperless: docker compose pull", timeout=1800, cwd=cwd)
     _schritt(mandant, 70, "Paperless: neu starten")
@@ -59,15 +83,7 @@ def openslides_aktualisieren(mandant, neu):
     compose_befehl = ["docker", "compose"]
 
     _schritt(mandant, 15, "OpenSlides: Datenbank sichern")
-    dump = basis.docker(compose_befehl + ["exec", "-T", "postgres", "pg_dump", "-U", "openslides", "-d", "openslides"],
-                        "OpenSlides: Datenbank-Dump vor dem Update", timeout=3600, cwd=verz, env=umgebung)
-    if not dump.strip():
-        raise BereitstellungsFehler("OpenSlides: Datenbank-Dump ist leer - Update abgebrochen.")
-    ziel = verz / "backups"
-    ziel.mkdir(exist_ok=True)
-    datei = ziel / f"openslides-{alt}-{datetime.now():%Y%m%d-%H%M%S}.sql"
-    datei.write_text(dump, encoding="utf-8")
-    mandant.protokollieren(f"OpenSlides-Datenbank gesichert in {datei}.")
+    openslides_dump(mandant, alt)
 
     _schritt(mandant, 35, f"OpenSlides: Version {alt} → {neu} eintragen")
     original_compose, original_config = compose.read_text(encoding="utf-8"), config.read_text(encoding="utf-8")

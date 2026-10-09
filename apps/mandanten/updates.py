@@ -92,7 +92,8 @@ def fuer_anzeige(anfordern=True):
     stunden = settings.UPDATE_PRUEFUNG_STUNDEN
     if anfordern and stunden > 0 and not zustand.rollout_laeuft:
         jetzt = timezone.now()
-        veraltet = zustand.geprueft_am is None or jetzt - zustand.geprueft_am > timedelta(hours=stunden)
+        veraltet = (zustand.geprueft_am is None or jetzt - zustand.geprueft_am > timedelta(hours=stunden)
+                    or bool(settings.UPDATE_DIENSTE_PRUEFEN and zustand.dienste_unbekannt))
         kuerzlich = zustand.angefordert_am and jetzt - zustand.angefordert_am < timedelta(minutes=10)
         if veraltet and not kuerzlich:
             UpdateZustand.objects.filter(pk=1).update(angefordert_am=jetzt)

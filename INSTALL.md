@@ -170,4 +170,4 @@ sudo systemctl disable --now portal-web portal-worker && sudo rm /etc/systemd/sy
 docker rm -f portal-caddy portal-postgres portal-redis        # Daten bleiben in den Volumes portal-*
 ```
 
-Vereins-Instanzen vorher im Admin stilllegen oder mit `manage.py mandant_abbauen <kürzel> [--daten-loeschen]` abbauen.
+Vereins-Instanzen vorher im Admin stilllegen (oder mit „Instanz ENDGÜLTIG löschen“ samt Abschlusssicherung entfernen) oder mit `manage.py mandant_abbauen <kürzel> [--daten-loeschen]` abbauen.

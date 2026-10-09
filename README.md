@@ -26,6 +26,10 @@ Aktuell automatisiert:
   Let's-Encrypt-Zertifikat selbst. Die Konfiguration wird jedes Mal komplett neu erzeugt (idempotent). Ohne
   `CADDY_ADMIN_URL` bleibt die Automatisierung aus. Die Admin-API gibt vollen Zugriff auf Caddy – nur auf
   localhost erreichbar lassen. DNS muss auf den Server zeigen (Wildcard-DNS `*.domain` empfohlen).
+- **Endgültiges Löschen mit Abschlusssicherung**: Admin-Aktion „Instanz ENDGÜLTIG löschen …“ (Superuser, Kürzel eintippen) bzw.
+  `mandant_abbauen <kürzel> --daten-loeschen`. Vorher werden Feuerix (Datenbank, Medien, bei aktivem Backup-Ziel auch auf der
+  Freigabe), Paperless (Export) und OpenSlides (Dump) gesichert - scheitert etwas, wird nichts gelöscht. Der Instanzordner
+  mit `.env` und allen Sicherungen landet in `instanzen/_geloescht/` und wird nie automatisch entfernt.
 - **Abbau**: `python manage.py mandant_abbauen <kürzel> [--daten-loeschen]` stoppt die Instanz und nimmt sie
   aus dem Reverse Proxy (Status „Stillgelegt“; mit `--daten-loeschen` werden auch Datenbank und Medien
   unwiderruflich entfernt, Status „gelöscht“).

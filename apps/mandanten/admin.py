@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from . import backupziel, benachrichtigung, betrieb, gesamtlog, provisioning, tasks, updates
-from .basis import WARTESCHLANGE_DIENST, WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
+from .basis import vormerken, WARTESCHLANGE_DIENST, WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
 from .models import BackupZiel, Benachrichtigung, LogEintrag, MandantInstanz, UpdateZustand
 
 
@@ -50,7 +50,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        "protokoll", "feuerix_version", "paperless_version", "openslides_version",
                        "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "sichern", "aktualisieren",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "endgueltig_loeschen", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
@@ -69,6 +69,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         eigene = [path("<int:pk>/status/", self.admin_site.admin_view(self.status_json), name="mandanten_status"),
+                  path("<int:pk>/endgueltig-loeschen/", self.admin_site.admin_view(self.loeschen_view),
+                       name="mandanten_loeschen"),
                   path("update/pruefen/", self.admin_site.admin_view(self.update_pruefen_view),
                        name="mandanten_update_pruefen"),
                   path("update/ausrollen/", self.admin_site.admin_view(self.update_ausrollen_view),
@@ -112,6 +114,42 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, marker
         m.save(update_fields=["status", "fortschritt", "schritt"])
 
+    def has_delete_permission(self, request, obj=None):
+        """Den Datensatz einer Instanz loescht man nur, wenn nichts mehr dranhaengt (nie bereitgestellt oder bereits
+        endgueltig geloescht). Alles andere laeuft ueber "Instanz endgueltig loeschen" mit Abschlusssicherung."""
+        if obj is not None and obj.status not in ("neu", "geloescht"):
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def loeschen_view(self, request, pk):
+        """Bestaetigungsseite fuer das endgueltige Loeschen (nur Superuser): vorher Abschlusssicherung."""
+        from django.http import Http404
+        from django.template.response import TemplateResponse
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        m = MandantInstanz.objects.filter(pk=pk).first()
+        if m is None:
+            raise Http404
+        liste = HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
+        if m.status not in ("laeuft", "gestoppt", "pausiert", "fehlgeschlagen"):
+            self.message_user(request, f"{m.kuerzel}: Löschen nicht möglich im Status „{m.get_status_display()}“.",
+                              messages.WARNING)
+            return liste
+        if request.method == "POST":
+            if request.POST.get("kuerzel", "").strip() == m.kuerzel:
+                vormerken(m, "Löschen: in der Warteschlange")
+                self._log(request, m, "Endgültiges Löschen gestartet (mit Abschlusssicherung)")
+                tasks.mandant_loeschen_task.delay(m.pk)
+                self.message_user(request, f"{m.kuerzel}: Abschlusssicherung und Löschen gestartet - Fortschritt siehe "
+                                           "Spalte „Fortschritt“.", messages.INFO)
+                return liste
+            self.message_user(request, "Das Kürzel stimmt nicht - es wurde nichts gelöscht.", messages.ERROR)
+        from . import endsicherung
+        kontext = dict(self.admin_site.each_context(request), title="Instanz endgültig löschen", instanz=m,
+                       opts=self.model._meta, backupziel_aktiv=backupziel.aktuell() is not None,
+                       archiv=endsicherung.archiv_verzeichnis())
+        return TemplateResponse(request, "admin/mandanten/endgueltig_loeschen.html", kontext)
+
     def _zurueck(self, request):
         return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:index"))
 
@@ -127,6 +165,10 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"Feuerix {z.ziel_version} ist das Ziel - Rollout empfohlen.", messages.WARNING)
         else:
             self.message_user(request, f"Feuerix ist aktuell ({z.lokale_version}).", messages.SUCCESS)
+        if z.dienste_fehler:
+            self.message_user(request, f"Zusatzdienste: {z.dienste_fehler}", messages.WARNING)
+        for name, kuerzel in z.dienste_unbekannt:
+            self.message_user(request, f"{name}: Version bei {', '.join(kuerzel)} nicht ermittelt.", messages.WARNING)
         return self._zurueck(request)
 
     def update_ausrollen_view(self, request):
@@ -363,14 +405,20 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                 self.message_user(request, f"{m.kuerzel}: Stilllegen nicht möglich im Status "
                                            f"„{m.get_status_display()}“.", messages.WARNING)
                 continue
-            m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
-            m.save(update_fields=["status", "fortschritt", "schritt"])
+            vormerken(m, "Stilllegen: in der Warteschlange")
             self._log(request, m, "Stilllegen gestartet")
             tasks.mandant_stilllegen_task.delay(m.pk)
             gestartet.append(m.kuerzel)
         if gestartet:
             self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
+
+    @admin.action(description="Instanz ENDGÜLTIG löschen (mit Abschlusssicherung) ...")
+    def endgueltig_loeschen(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(request, "Bitte genau eine Instanz zum Löschen auswählen.", messages.WARNING)
+            return None
+        return HttpResponseRedirect(reverse("admin:mandanten_loeschen", args=[queryset.first().pk]))
 
     @admin.action(description="Datenbank und Medien sichern")
     def sichern(self, request, queryset):

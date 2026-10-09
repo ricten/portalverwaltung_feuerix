@@ -7,7 +7,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-from . import backupziel, basis, benachrichtigung, openslides, paperless, provisioning
+from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
@@ -152,6 +152,7 @@ def _hochfahren(mandant, aktion, text):
         mandant.status = "laeuft"
         mandant.save(update_fields=["status"])
         provisioning._proxy_nachziehen(mandant)
+        dienstversionen.erfassen_sicher(mandant)
         basis.fortschritt(mandant, 100, "Fertig")
     except BereitstellungsFehler as e:
         mandant.status = "fehlgeschlagen"

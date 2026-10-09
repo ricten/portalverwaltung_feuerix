@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Start</a> &rsaquo; <a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}">Mandanten-Instanzen</a> &rsaquo; Endgültig löschen</div>
+{% endblock %}
+{% block content %}
+<h1>Instanz „{{ instanz.kuerzel }}“ endgültig löschen</h1>
+<p><strong>{{ instanz.verein_name }}</strong> ({{ instanz.domain }}) &ndash; Status: {{ instanz.get_status_display }}</p>
+
+<div class="pv-update pv-update-fehler" style="display:block">
+  <p><strong>Das entfernt alle Daten der Instanz</strong> (Datenbank, Medien und - falls eingerichtet - Paperless und OpenSlides)
+  <strong>unwiderruflich</strong> aus Docker.</p>
+</div>
+
+<h2>Was vorher passiert</h2>
+<ol>
+  <li>Die Instanz wird bei Bedarf gestartet.</li>
+  <li><strong>Abschlusssicherung</strong>: Feuerix (Datenbank und Medien{% if backupziel_aktiv %}, zusätzlich auf die Netzwerkfreigabe{% endif %}){% if instanz.paperless_domain %}, Paperless-Export{% endif %}{% if instanz.openslides_domain %}, OpenSlides-Datenbank-Dump{% endif %}.</li>
+  <li><strong>Schlägt etwas davon fehl, wird nichts gelöscht.</strong></li>
+  <li>Erst danach werden Container und Volumes entfernt.</li>
+  <li>Der Instanzordner mit der <code>.env</code> (Schlüssel zum Entschlüsseln), den Sicherungen und Exporten wird nach
+      <code>{{ archiv }}</code> verschoben und <strong>nie automatisch gelöscht</strong>.</li>
+</ol>
+
+<form method="post">{% csrf_token %}
+  <p>Zur Bestätigung das Kürzel <strong>{{ instanz.kuerzel }}</strong> eingeben:</p>
+  <p><input type="text" name="kuerzel" autocomplete="off" autofocus style="width:20em"></p>
+  <p>
+    <input type="submit" value="Sichern und endgültig löschen" class="default" style="background:#c62828">
+    <a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}" class="button cancel-link">Abbrechen</a>
+  </p>
+</form>
+{% endblock %}

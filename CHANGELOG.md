@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.24.0 (2026-10-10)
+- Neu: **Endgültiges Löschen einer Instanz mit Abschlusssicherung** (Admin-Aktion „Instanz ENDGÜLTIG löschen …“, nur
+  Superuser, Bestätigung durch Eintippen des Kürzels). Vorher startet das Portal die Instanz bei Bedarf und sichert
+  Feuerix (Datenbank und Medien, bei aktivem Backup-Ziel auch auf die Netzwerkfreigabe), Paperless (Export) und OpenSlides
+  (Datenbank-Dump). **Schlägt irgendein Schritt fehl, wird nichts gelöscht.** Danach werden Container und Volumes entfernt
+  und der Instanzordner (mit `.env` und Schlüsseln, Sicherungen, Exporten) nach `instanzen/_geloescht/<kürzel>-<Zeit>`
+  verschoben und nie automatisch entfernt. Auch `manage.py mandant_abbauen --daten-loeschen` macht jetzt zuerst die
+  Sicherung (`--ohne-sicherung` nur als ausdrücklicher Notfall).
+- Der normale „Löschen“-Knopf löscht nur noch Datensätze von Instanzen, die nie bereitgestellt wurden oder schon
+  endgültig gelöscht sind (sonst blieben Container und Schlüssel verwaist zurück).
+- Fix: Schlug „Stilllegen“ oder „Löschen“ beim ersten Schritt fehl, blieb die Instanz im Status „In Arbeit“ hängen; der
+  ursprüngliche Status wird jetzt wiederhergestellt.
+- Fix: Die Versionen von Paperless-ngx und OpenSlides wurden nur bei der Update-Prüfung erfasst, daher stand nach dem
+  Update des Portals „-“ und der Update-Pfeil fehlte. Sie werden jetzt auch am Ende von Bereitstellung, Start und
+  Neustart erfasst; fehlt eine Version, startet das Portal die Prüfung automatisch und zeigt im Hinweis, bei welcher
+  Instanz sie nicht ermittelt werden konnte; Fehler der Zusatzdienste-Prüfung (z. B. GitHub nicht erreichbar) stehen
+  ebenfalls dort.
+
 ## 0.23.1 (2026-10-10)
 - Fix: **OpenSlides bei mehreren Instanzen.** Der Verwaltungsdienst (`backendManage`) lag bei jeder Instanz auf dem Host-Port
   9002; bei der zweiten kollidierte das („port is already allocated“), und `osmanage initial-data` landete bei der falschen
