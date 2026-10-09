@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from . import backupziel, benachrichtigung, betrieb
+from . import backupziel, benachrichtigung, betrieb, gesamtlog
 from .basis import BereitstellungsFehler
 from .models import BackupZiel, MandantInstanz
 
@@ -88,6 +88,10 @@ def backupziel_pruefen():
                 "ausfall", "Backup-Ziel ist nicht erreichbar",
                 f"Das Backup-Ziel {name} ist seit {_zeit(offline_seit)} nicht erreichbar: {fehler} "
                 "Sicherungen können so nicht abgelegt werden und Updates werden nicht durchgeführt.") or gesendet
+    if online and ziel.online is False:
+        gesamtlog.log(f"Backup-Ziel {name} wieder erreichbar.", kategorie="Backup-Ziel")
+    elif not online and ziel.online is not False:
+        gesamtlog.log(f"Backup-Ziel {name} nicht erreichbar: {fehler}", kategorie="Backup-Ziel", ebene="fehler")
     BackupZiel.objects.filter(pk=1).update(online=online, online_geprueft_am=jetzt, online_fehler=fehler,
                                            offline_seit=offline_seit, offline_mail_gesendet=gesendet)
     return online
@@ -101,4 +105,5 @@ def alle_pruefen(timeout=5):
     # Instanzen, die nicht laufen, haben keinen Online-Zustand
     MandantInstanz.objects.exclude(status="laeuft").exclude(online__isnull=True).update(
         online=None, offline_seit=None, offline_mail_gesendet=False)
+    gesamtlog.aufraeumen()
     return {"instanzen": ergebnis, "backupziel": backupziel_pruefen()}

@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.mail import EmailMessage, get_connection
 from django.utils import timezone
 
+from . import gesamtlog
 from .models import Benachrichtigung
 
 EREIGNISSE = {"ausfall": "bei_ausfall", "backup": "bei_backup_fehler", "update": "bei_update"}
@@ -46,8 +47,11 @@ def senden(ereignis, betreff, text):
         _verschicken(cfg, betreff, text)
     except Exception as e:
         Benachrichtigung.objects.filter(pk=1).update(letzter_fehler=f"{type(e).__name__}: {e}"[:500])
+        gesamtlog.log(f"E-Mail „{betreff}“ konnte nicht gesendet werden: {type(e).__name__}: {e}",
+                      kategorie="E-Mail", ebene="fehler")
         return False
     Benachrichtigung.objects.filter(pk=1).update(letzter_fehler="", letzte_mail_am=timezone.now())
+    gesamtlog.log(f"E-Mail „{betreff}“ an {', '.join(cfg.empfaenger_liste())} gesendet.", kategorie="E-Mail")
     return True
 
 

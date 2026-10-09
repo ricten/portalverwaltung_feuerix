@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.21.0 (2026-10-10)
+- Neu: **Gesamtlog** (Admin › Gesamtlog): eine zentrale, nur lesbare Liste aller Ereignisse mit Zeit, Ebene (Info/Warnung/
+  Fehler), Quelle (Instanz oder „Portal“), Kategorie, Text und Benutzer; filter- und durchsuchbar, nach Datum gegliedert.
+  Jede Zeile aus den Instanz-Protokollen landet automatisch auch dort. Zusätzlich: Aktionen im Admin mit Benutzername
+  (Starten, Stoppen, Neustarten, Stilllegen, Update, Sichern, Bereitstellen, Rollout), Update-Prüfung und Rollout,
+  Backup-Ziel erreichbar/nicht erreichbar, versendete und fehlgeschlagene Mails, Änderungen an Backup-Ziel und
+  Benachrichtigung (ohne Passwörter). Einträge älter als `LOG_AUFBEWAHRUNG_TAGE` (Standard 90) werden automatisch
+  gelöscht. Ein Fehler beim Schreiben des Logs stört nie den eigentlichen Vorgang.
+- Datenbank-Migration 0012.
+
 ## 0.20.1 (2026-10-10)
 - Fix: Während eine Instanz startet, stoppt, aktualisiert oder bereitgestellt wird („In Arbeit“), meldete der Update-Hinweis
   fälschlich „Feuerix ist aktuell“. Jetzt steht dort „Updates sind gerade nicht möglich: Instanzen in Arbeit …“, der Knopf

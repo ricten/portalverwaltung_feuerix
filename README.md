@@ -52,6 +52,9 @@ Aktuell automatisiert:
   - **E-Mail-Benachrichtigung** (Admin › Benachrichtigungen): SMTP-Daten und Empfänger einstellen, Test-Mail senden. Mails
     nur bei Ereignissen: Ausfall/Wiederkehr (erst nach einstellbarer Dauer, Standard 10 Min.), fehlgeschlagene Sicherung,
     neue Feuerix-Version.
+  - **Gesamtlog** (Admin › Gesamtlog): zentrale, nur lesbare Liste aller Ereignisse (Instanz-Protokolle, Aktionen der Benutzer mit
+    Namen, Update-Prüfung und Rollout, Backup-Ziel, Mails, Einstellungsänderungen) mit Filter nach Ebene, Quelle und Kategorie
+    sowie Suche; Aufbewahrung `LOG_AUFBEWAHRUNG_TAGE` (Standard 90 Tage).
   - **Online-Check**: `python manage.py mandant_online_check` (vom Installer als systemd-Timer `portal-check.timer`, alle
     5 Minuten) prüft Instanzen und Backup-Ziel, speichert „offline seit“, protokolliert Wechsel und zeigt Ausfälle als roten
     Hinweis im Admin.

@@ -6,9 +6,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import backupziel, benachrichtigung, betrieb, provisioning, tasks, updates
+from . import backupziel, benachrichtigung, betrieb, gesamtlog, provisioning, tasks, updates
 from .basis import WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
-from .models import BackupZiel, Benachrichtigung, MandantInstanz, UpdateZustand
+from .models import BackupZiel, Benachrichtigung, LogEintrag, MandantInstanz, UpdateZustand
 
 
 class MandantForm(forms.ModelForm):
@@ -78,6 +78,11 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        name="mandanten_dienst")]
         return eigene + super().get_urls()
 
+    def _log(self, request, m, text):
+        """Aktion eines Benutzers im Protokoll der Instanz und im Gesamtlog festhalten."""
+        benutzer = request.user.get_username()
+        m.protokollieren(f"{text} (Benutzer: {benutzer})", benutzer=benutzer)
+
     def _update_vormerken(self, m):
         """Sofort sichtbar machen (Balken), bevor der Worker anfaengt."""
         marker = WARTESCHLANGE_UPDATE_GESTOPPT if m.status == "gestoppt" else WARTESCHLANGE_UPDATE
@@ -116,6 +121,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                               + "), sind keine Updates möglich. Bitte warten, bis der Vorgang beendet ist.",
                               messages.WARNING)
         else:
+            gesamtlog.log("Rollout per Klick gestartet.", kategorie="Update", benutzer=request.user.get_username())
             tasks.update_ausrollen_task.delay()
             self.message_user(request, "Rollout gestartet - Fortschritt siehe Hinweis oben.", messages.INFO)
         return self._zurueck(request)
@@ -139,6 +145,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                                   messages.WARNING)
             else:
                 self._update_vormerken(m)
+                self._log(request, m, "Update gestartet")
                 tasks.mandant_update_task.delay(m.pk)
                 self.message_user(request, f"Update für {m.kuerzel} gestartet (bei Bedarf mit vorheriger Sicherung) - "
                                            "Fortschritt siehe Spalte „Fortschritt“.", messages.INFO)
@@ -242,6 +249,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     def _starten(self, request, queryset, task, text):
         for m in queryset:
+            self._log(request, m, f"{text} gestartet")
             task.delay(m.pk)
         self.message_user(request, f"{text} für {queryset.count()} Instanz(en) gestartet - Fortschritt siehe "
                                    "Spalte „Fortschritt“ und Protokoll der Instanz.", messages.INFO)
@@ -264,6 +272,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             # sofort sichtbar machen, damit die Oberflaeche den Fortschritt live anzeigen kann
             m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
             m.save(update_fields=["status", "fortschritt", "schritt"])
+            self._log(request, m, f"{text} gestartet")
             task.delay(m.pk)
             gestartet.append(m.kuerzel)
         if gestartet:
@@ -292,6 +301,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                 continue
             m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
             m.save(update_fields=["status", "fortschritt", "schritt"])
+            self._log(request, m, "Stilllegen gestartet")
             tasks.mandant_stilllegen_task.delay(m.pk)
             gestartet.append(m.kuerzel)
         if gestartet:
@@ -311,6 +321,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                                            f"(Status: {m.get_status_display()}).", messages.WARNING)
                 continue
             self._update_vormerken(m)
+            self._log(request, m, "Update gestartet")
             tasks.mandant_update_task.delay(m.pk)
             gestartet.append(m.kuerzel)
         if gestartet:
@@ -383,6 +394,9 @@ class BackupZielAdmin(admin.ModelAdmin):
         if form.cleaned_data.get("passwort_neu"):
             obj.passwort = form.cleaned_data["passwort_neu"]
         super().save_model(request, obj, form, change)
+        gesamtlog.log(f"Backup-Ziel gespeichert ({obj}, {'aktiv' if obj.aktiv else 'inaktiv'}"
+                      f"{', Passwort geändert' if form.cleaned_data.get('passwort_neu') else ''}).",
+                      kategorie="Einstellungen", benutzer=request.user.get_username())
 
     def response_change(self, request, obj):
         if "_testen" in request.POST:
@@ -431,6 +445,9 @@ class BenachrichtigungAdmin(admin.ModelAdmin):
         if form.cleaned_data.get("smtp_passwort_neu"):
             obj.smtp_passwort = form.cleaned_data["smtp_passwort_neu"]
         super().save_model(request, obj, form, change)
+        gesamtlog.log(f"E-Mail-Benachrichtigung gespeichert ({'aktiv' if obj.aktiv else 'inaktiv'}"
+                      f"{', Passwort geändert' if form.cleaned_data.get('smtp_passwort_neu') else ''}).",
+                      kategorie="Einstellungen", benutzer=request.user.get_username())
 
     def response_change(self, request, obj):
         if "_testmail" in request.POST:
@@ -444,3 +461,33 @@ class BenachrichtigungAdmin(admin.ModelAdmin):
                 self.message_user(request, f"Test-Mail fehlgeschlagen: {type(e).__name__}: {e}", messages.ERROR)
             return HttpResponseRedirect(request.path)
         return super().response_change(request, obj)
+
+
+@admin.register(LogEintrag)
+class LogEintragAdmin(admin.ModelAdmin):
+    """Gesamtlog: nur lesen, filtern und durchsuchen (Loeschen nur fuer Superuser)."""
+    list_display = ("zeit", "ebene_farbig", "quelle", "kategorie", "kurztext", "benutzer")
+    list_filter = ("ebene", "quelle", "kategorie")
+    search_fields = ("text", "quelle", "benutzer")
+    date_hierarchy = "zeit"
+    list_per_page = 100
+    readonly_fields = ("zeit", "ebene", "quelle", "kategorie", "text", "benutzer")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    @admin.display(description="Ebene", ordering="ebene")
+    def ebene_farbig(self, obj):
+        farbe = {"info": "#2e7d32", "warnung": "#ef6c00", "fehler": "#c62828"}[obj.ebene]
+        return format_html('<strong style="color:{}">{}</strong>', farbe, obj.get_ebene_display())
+
+    @admin.display(description="Ereignis")
+    def kurztext(self, obj):
+        text = obj.text.replace("\n", " ")
+        return text if len(text) <= 160 else text[:157] + "…"

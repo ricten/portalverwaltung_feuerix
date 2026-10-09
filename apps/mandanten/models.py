@@ -124,10 +124,13 @@ class MandantInstanz(models.Model):
         letzte = self.letzte_sicherung
         return bool(letzte and timezone.now() - letzte <= timedelta(hours=settings.UPDATE_BACKUP_MAX_ALTER_STUNDEN))
 
-    def protokollieren(self, text):
+    def protokollieren(self, text, benutzer=""):
+        """Haengt eine Zeile an das Protokoll der Instanz an und schreibt sie zusaetzlich in den Gesamtlog."""
+        from . import gesamtlog
         zeile = f"[{timezone.now():%d.%m.%Y %H:%M:%S}] {text}"
         self.protokoll = (self.protokoll + "\n" + zeile).strip()
         self.save(update_fields=["protokoll", "aktualisiert_am"])
+        gesamtlog.log(text, quelle=self.kuerzel, kategorie="Instanz", benutzer=benutzer)
 
 
 class UpdateZustand(models.Model):
@@ -303,3 +306,24 @@ class Benachrichtigung(models.Model):
                 fehler.setdefault("empfaenger", "Mindestens ein Empfänger ist nötig.")
         if fehler:
             raise ValidationError(fehler)
+
+
+class LogEintrag(models.Model):
+    """Ein Ereignis im Gesamtlog (nur lesbar im Admin)."""
+    EBENEN = [("info", "Info"), ("warnung", "Warnung"), ("fehler", "Fehler")]
+
+    zeit = models.DateTimeField("Zeit", auto_now_add=True, db_index=True)
+    ebene = models.CharField("Ebene", max_length=10, choices=EBENEN, default="info", db_index=True)
+    quelle = models.CharField("Quelle", max_length=40, blank=True, db_index=True,
+                              help_text="Kürzel der Instanz oder „Portal“.")
+    kategorie = models.CharField("Kategorie", max_length=30, blank=True)
+    text = models.TextField("Ereignis")
+    benutzer = models.CharField("Benutzer", max_length=150, blank=True)
+
+    class Meta:
+        verbose_name = "Log-Eintrag"
+        verbose_name_plural = "Gesamtlog"
+        ordering = ["-zeit", "-id"]
+
+    def __str__(self):
+        return f"{self.zeit:%d.%m.%Y %H:%M} {self.quelle}: {self.text[:60]}"

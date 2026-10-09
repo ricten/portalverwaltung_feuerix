@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from . import basis, benachrichtigung, betrieb, provisioning
+from . import basis, benachrichtigung, betrieb, gesamtlog, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz, UpdateZustand
 
@@ -48,6 +48,7 @@ def aenderungen_auszug(changelog, lokale_version):
 def pruefen():
     """Holt den Remote-Stand (git fetch) und speichert Versionen und Aenderungen. Fehler landen im Zustand."""
     zustand = UpdateZustand.holen()
+    vorheriger_fehler, vorherige_remote = zustand.fehler, zustand.remote_version
     zustand.lokale_version = provisioning.feuerix_version()
     try:
         _git(["fetch", "--quiet"], "git fetch im Feuerix-Checkout")
@@ -64,6 +65,11 @@ def pruefen():
     except BereitstellungsFehler as e:
         zustand.fehler = str(e)[:1000]
     zustand.geprueft_am = timezone.now()
+    if zustand.fehler and zustand.fehler != vorheriger_fehler:
+        gesamtlog.log(f"Update-Prüfung fehlgeschlagen: {zustand.fehler}", kategorie="Update", ebene="fehler")
+    if zustand.update_verfuegbar and zustand.remote_version != vorherige_remote:
+        gesamtlog.log(f"Neue Feuerix-Version {zustand.remote_version} verfügbar (installiert: {zustand.lokale_version}).",
+                      kategorie="Update")
     if (zustand.update_verfuegbar and not zustand.fehler and zustand.remote_version != zustand.update_mail_version
             and benachrichtigung.senden(
                 "update", f"Feuerix {zustand.remote_version} verfügbar",
@@ -128,6 +134,7 @@ def ausrollen(pause_sekunden=None):
         UpdateZustand.objects.filter(pk=1).update(rollout_text=text[:200])
 
     ergebnis = ""
+    gesamtlog.log("Rollout gestartet.", kategorie="Update")
     try:
         zustand = pruefen()
         if zustand.fehler:
@@ -158,6 +165,7 @@ def ausrollen(pause_sekunden=None):
     except BereitstellungsFehler as e:
         ergebnis = f"Abgebrochen: {str(e)[:500]}"
     finally:
+        gesamtlog.log(f"Rollout beendet: {ergebnis}", kategorie="Update")
         UpdateZustand.objects.filter(pk=1).update(rollout_laeuft=False, rollout_text="", rollout_ergebnis=ergebnis,
                                                   rollout_beendet_am=timezone.now())
         pruefen()
