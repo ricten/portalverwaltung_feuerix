@@ -32,4 +32,5 @@ Reverse Proxy (Caddy) einträgt und betreibt; optional mit Paperless-ngx und Ope
 
 ## Versionierung
 Bei jeder Änderung mit Nutzerwirkung: Nummer in [VERSION.md](VERSION.md) erhöhen (Semantic Versioning) und einen
-Eintrag oben in [CHANGELOG.md](CHANGELOG.md) schreiben. Rein interne Commits brauchen keinen Eintrag.
+Eintrag oben in [CHANGELOG.md](CHANGELOG.md) schreiben. Nach dem Commit den Stand mit einem annotierten Git-Tag
+`vX.Y.Z` markieren (`git tag -a vX.Y.Z -m "..."`) und Tags mitpushen (`git push --tags`). Rein interne Commits brauchen keinen Eintrag.
