@@ -107,8 +107,14 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             return HttpResponseNotAllowed(["POST"])
         if not self.has_change_permission(request):
             raise PermissionDenied
-        if UpdateZustand.holen().rollout_laeuft:
+        zustand = UpdateZustand.holen()
+        if zustand.rollout_laeuft:
             self.message_user(request, "Es läuft bereits ein Rollout.", messages.WARNING)
+        elif zustand.in_arbeit_instanzen:
+            self.message_user(request, "Während Instanzen in Arbeit sind ("
+                              + ", ".join(m.kuerzel for m in zustand.in_arbeit_instanzen)
+                              + "), sind keine Updates möglich. Bitte warten, bis der Vorgang beendet ist.",
+                              messages.WARNING)
         else:
             tasks.update_ausrollen_task.delay()
             self.message_user(request, "Rollout gestartet - Fortschritt siehe Hinweis oben.", messages.INFO)

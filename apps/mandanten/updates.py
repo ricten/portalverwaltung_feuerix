@@ -112,6 +112,10 @@ def ausrollen(pause_sekunden=None):
     alle laufenden Instanzen, die noch nicht auf der Zielversion sind. Ein Fehler bei einer Instanz stoppt die
     anderen nicht."""
     pause = settings.UPDATE_PAUSE_SEKUNDEN if pause_sekunden is None else pause_sekunden
+    arbeit = MandantInstanz.objects.filter(status="wird_bereitgestellt")
+    if arbeit.exists():
+        raise BereitstellungsFehler("Während Instanzen in Arbeit sind (" + ", ".join(m.kuerzel for m in arbeit)
+                                    + "), sind keine Updates möglich.")
     UpdateZustand.holen()
     jetzt = timezone.now()
     beansprucht = UpdateZustand.objects.filter(pk=1).filter(

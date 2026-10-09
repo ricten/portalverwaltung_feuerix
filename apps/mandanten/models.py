@@ -174,6 +174,12 @@ class UpdateZustand(models.Model):
                     .exclude(feuerix_version=self.ziel_version))
 
     @property
+    def in_arbeit_instanzen(self):
+        """Instanzen, die gerade starten, stoppen, aktualisiert oder bereitgestellt werden - solange sind Updates
+        nicht moeglich und der Update-Status nicht verlaesslich."""
+        return list(MandantInstanz.objects.filter(status="wird_bereitgestellt"))
+
+    @property
     def rollout_empfohlen(self):
         return self.update_verfuegbar or bool(self.veraltete_instanzen)
 

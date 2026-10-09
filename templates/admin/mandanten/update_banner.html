@@ -18,12 +18,23 @@
       </div>{% endif %}
     {% endwith %}
     {% if update.aenderungen %}<details><summary>Änderungen anzeigen</summary><pre>{{ update.aenderungen }}</pre></details>{% endif %}
+    {% with arbeit=update.in_arbeit_instanzen %}
+    {% if arbeit %}
+      <div class="pv-update-liste"><strong>Updates sind gerade nicht möglich:</strong> Instanzen in Arbeit
+        {% for m in arbeit %}<span class="pv-chip">{{ m.kuerzel }}{% if m.schritt %} <small>{{ m.schritt|truncatechars:50 }}</small>{% endif %}</span>{% endfor %}
+        – bitte warten, bis der Vorgang beendet ist.</div>
+    {% endif %}
     <div class="pv-update-aktionen">
-      <form method="post" action="{% url 'admin:mandanten_update_ausrollen' %}" onsubmit="return confirm('Update jetzt nacheinander auf alle genannten Instanzen ausrollen? Jede Instanz ist dabei kurz nicht erreichbar. Fehlende oder veraltete Sicherungen werden vorher automatisch angelegt.');">{% csrf_token %}
+      {% if not arbeit %}<form method="post" action="{% url 'admin:mandanten_update_ausrollen' %}" onsubmit="return confirm('Update jetzt nacheinander auf alle genannten Instanzen ausrollen? Jede Instanz ist dabei kurz nicht erreichbar. Fehlende oder veraltete Sicherungen werden vorher automatisch angelegt.');">{% csrf_token %}
         <button class="pv-update-knopf pv-update-haupt" type="submit">Update jetzt ausrollen</button>
-      </form>
+      </form>{% endif %}
       <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Erneut prüfen</button></form>
     </div>
+    {% endwith %}
+  {% elif update.in_arbeit_instanzen %}
+    <span><strong>Updates sind gerade nicht möglich:</strong> Instanzen in Arbeit
+      {% for m in update.in_arbeit_instanzen %}<span class="pv-chip">{{ m.kuerzel }}{% if m.schritt %} <small>{{ m.schritt|truncatechars:50 }}</small>{% endif %}</span>{% endfor %}
+      – der Update-Status ist erst danach verlässlich.</span>
   {% else %}
     <span>Feuerix ist aktuell{% if update.lokale_version %} ({{ update.lokale_version }}){% endif %}{% if update.geprueft_am %} · zuletzt geprüft {{ update.geprueft_am|date:"d.m.Y H:i" }}{% endif %}.</span>
     <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Jetzt prüfen</button></form>

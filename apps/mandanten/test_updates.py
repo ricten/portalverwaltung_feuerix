@@ -527,3 +527,37 @@ class GestoppteInstanzUpdateTests(TestCase):
              patch("apps.mandanten.updates.betrieb.update_mit_sicherung") as upd:
             updates.ausrollen(pause_sekunden=0)
         upd.assert_called_once()
+
+
+class InArbeitTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_superuser("ia", "i@example.org", "pw"))
+
+    def test_hinweis_sagt_nicht_aktuell_waehrend_eine_instanz_in_arbeit_ist(self):
+        UpdateZustand.objects.update_or_create(pk=1, defaults=dict(
+            lokale_version="1.58.1", remote_version="1.58.1", geprueft_am=timezone.now()))
+        _m("alt", "1.58.0", status="wird_bereitgestellt", schritt="Feuerix: starten")
+        html = self.client.get("/admin/").content.decode()
+        self.assertIn("Updates sind gerade nicht möglich", html)
+        self.assertIn("alt", html)
+        self.assertNotIn("Feuerix ist aktuell", html)
+
+    def test_knopf_ausgeblendet_wenn_update_da_aber_instanz_in_arbeit(self):
+        UpdateZustand.objects.update_or_create(pk=1, defaults=dict(
+            lokale_version="1.58.0", remote_version="1.59.0", geprueft_am=timezone.now()))
+        _m("a", "1.58.0")
+        _m("b", "1.58.0", status="wird_bereitgestellt", schritt="Update: bauen")
+        html = self.client.get("/admin/").content.decode()
+        self.assertIn("Updates sind gerade nicht möglich", html)
+        self.assertNotIn("Update jetzt ausrollen", html)
+        MandantInstanz.objects.filter(kuerzel="b").update(status="laeuft")
+        self.assertIn("Update jetzt ausrollen", self.client.get("/admin/").content.decode())
+
+    def test_rollout_wird_waehrend_der_arbeit_abgelehnt(self):
+        _m("c", "1.58.0", status="wird_bereitgestellt", schritt="Feuerix: starten")
+        with patch("apps.mandanten.tasks.update_ausrollen_task.delay") as delay:
+            antwort = self.client.post("/admin/mandanten/mandantinstanz/update/ausrollen/", follow=True)
+        delay.assert_not_called()
+        self.assertContains(antwort, "keine Updates möglich")
+        with self.assertRaises(BereitstellungsFehler):
+            updates.ausrollen(pause_sekunden=0)

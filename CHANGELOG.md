@@ -4,6 +4,11 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.20.1 (2026-10-10)
+- Fix: Während eine Instanz startet, stoppt, aktualisiert oder bereitgestellt wird („In Arbeit“), meldete der Update-Hinweis
+  fälschlich „Feuerix ist aktuell“. Jetzt steht dort „Updates sind gerade nicht möglich: Instanzen in Arbeit …“, der Knopf
+  „Update jetzt ausrollen“ ist in dieser Zeit ausgeblendet und ein Rollout wird abgelehnt.
+
 ## 0.20.0 (2026-10-10)
 - Neu: **E-Mail-Benachrichtigung** (Admin › Benachrichtigungen: SMTP-Server mit Verschlüsselung, Benutzer, Passwort
   (verschlüsselt gespeichert), Absender, Empfänger, „Speichern und Test-Mail senden“). Mails gibt es nur bei Ereignissen:
