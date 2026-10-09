@@ -82,6 +82,7 @@ im Admin oder `./venv/bin/python manage.py mandant_update --git-pull`.
 | `ensurepip is not available` | `sudo apt install python3-venv` (bzw. `python3.13-venv`), dann `rm -rf venv` und Installer erneut starten |
 | `requirements.txt` nicht gefunden / „Verzeichnis ist unvollständig“ | Verzeichnis ist kein vollständiger Klon – siehe Schritt 1 |
 | `permission denied` bei Docker | Benutzer nicht in der Gruppe `docker` (Voraussetzungen) |
+| Anmeldung: „CSRF-Verifizierung fehlgeschlagen“ (403) | meist veraltete Cookies/Cache im Browser (z. B. nach einem Update): Seite im privaten Fenster öffnen oder Cookies der Domain löschen |
 | Seite zeigt „Not Found“ | Version < 0.7.0 oder Pfad falsch – `/admin/` aufrufen, `git pull` und Dienst neu starten |
 | Bereitstellung hängt bei 35 % und schlägt fehl | Logs des Web-Containers: `docker logs --tail 50 mandant-<kürzel>-web-1`; Protokoll der Instanz im Admin lesen |
 | `password authentication failed for user "mandant_…"` | Fehler in Version < 0.7.1. Nach `git pull` und Neustart der Dienste: `docker compose -p mandant-<kürzel> down -v`, dann erneut **Bereitstellen** |
