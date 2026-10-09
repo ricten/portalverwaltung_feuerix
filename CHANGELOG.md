@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.19.0 (2026-10-10)
+- Neu: **Backup-Ziel auf einer Netzwerkfreigabe (SMB/CIFS)** mit Benutzer und Passwort (verschlüsselt gespeichert),
+  einstellbar im Admin unter „Backup-Ziel“ (Server, Freigabe, Unterordner, Aufbewahrung, Option „lokale Kopie löschen“,
+  Knopf „Speichern und Verbindung testen“). Jede Sicherung wird nach dem Anlegen dorthin hochgeladen (Größe wird
+  geprüft). Ist das Ziel aktiv, gilt eine Sicherung erst nach erfolgreichem Upload als aktuell; schlägt er fehl, wird
+  kein Update durchgeführt. Bibliothek `smbprotocol` (kein Mounten, kein Root; SMB-Signierung aktiv) - bitte
+  `pip install -r requirements.txt` ausführen.
+- Neu: **Regelmäßiger Online-Check** (`manage.py mandant_online_check`, vom Installer als systemd-Timer alle 5 Minuten
+  eingerichtet): prüft laufende Instanzen (alle Dienste) und das Backup-Ziel, merkt sich „offline seit“, protokolliert
+  Wechsel je Instanz und zeigt Ausfälle als roten Hinweis auf Startseite und Instanzliste.
+- Datenbank-Migration 0010.
+
 ## 0.18.0 (2026-10-10)
 - **Gestoppte Instanzen** werden jetzt bei der Update-Prüfung mitgezählt (die gespeicherte Feuerix-Version bleibt beim
   Stoppen erhalten): Sie erscheinen im Update-Hinweis, die Versionsspalte zeigt den Update-Knopf, und der Gesamt-Rollout

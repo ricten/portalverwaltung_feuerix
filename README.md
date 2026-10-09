@@ -46,6 +46,12 @@ Aktuell automatisiert:
   `OPENSLIDES_PORT_BASIS`), gestartet, einmalig mit Startdaten initialisiert und als Anbindung
   (Benutzer `superadmin`, Passwort verschlüsselt gespeichert) in Feuerix hinterlegt.
 - **Betrieb**:
+  - **Backup-Ziel** (Admin › Backup-Ziel): Sicherungen zusätzlich auf eine SMB-/Windows-/NAS-Freigabe hochladen
+    (Server, Freigabe, Unterordner, Benutzer, Passwort verschlüsselt; Aufbewahrung in Tagen; optional lokale Kopie löschen;
+    „Speichern und Verbindung testen“). Mit aktivem Ziel zählt eine Sicherung erst nach erfolgreichem Upload als aktuell.
+  - **Online-Check**: `python manage.py mandant_online_check` (vom Installer als systemd-Timer `portal-check.timer`, alle
+    5 Minuten) prüft Instanzen und Backup-Ziel, speichert „offline seit“, protokolliert Wechsel und zeigt Ausfälle als roten
+    Hinweis im Admin.
   - `python manage.py mandant_status` – Status/Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring/Cron)
   - `python manage.py mandant_backup [kürzel]` – Feuerix' `backup.sh` im Container, Ergebnis wird nach
     `INSTANZEN_VERZEICHNIS/<kürzel>/backups` kopiert (Paperless/OpenSlides-Daten: Volumes separat sichern)

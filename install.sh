@@ -129,6 +129,33 @@ EOF
 }
 [ "$MIT_WORKER" = 1 ] && unit portal-worker "Portalverwaltung Celery-Worker" "$DIR/venv/bin/celery -A config worker -l info --concurrency 2"
 [ "$MIT_WEB" = 1 ] && unit portal-web "Portalverwaltung Weboberflaeche" "$DIR/venv/bin/gunicorn config.wsgi --bind 127.0.0.1:8000 --workers 2"
+if frage "  Regelmaessigen Online-Check (alle 5 Minuten, systemd-Timer) einrichten?" j; then
+  sudo tee /etc/systemd/system/portal-check.service >/dev/null <<EOF
+[Unit]
+Description=Portalverwaltung Online-Check
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+User=$(id -un)
+WorkingDirectory=$DIR
+EnvironmentFile=$DIR/.env
+ExecStart=$DIR/venv/bin/python manage.py mandant_online_check
+EOF
+  sudo tee /etc/systemd/system/portal-check.timer >/dev/null <<EOF
+[Unit]
+Description=Portalverwaltung Online-Check alle 5 Minuten
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  sudo systemctl daemon-reload && sudo systemctl enable --now portal-check.timer
+fi
 [ "$MIT_CADDY" = 1 ] && [ -n "$PORTAL_DOMAIN" ] && ./venv/bin/python manage.py shell -c "from apps.mandanten import proxy; proxy.proxy_aktualisieren()" || true
 
 echo

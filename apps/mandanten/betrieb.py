@@ -5,8 +5,9 @@ import urllib.request
 from pathlib import Path
 
 from django.conf import settings
+from django.utils import timezone
 
-from . import basis, openslides, paperless, provisioning
+from . import backupziel, basis, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
@@ -36,6 +37,15 @@ def backup(mandant, _pruefen=True):
     ziel = basis.instanz_verzeichnis(mandant, "backups")
     basis.docker(compose + ["cp", "web:/data/backups/.", str(ziel)], "Sicherung herauskopieren", timeout=3600)
     mandant.protokollieren(f"Sicherung erstellt und nach {ziel} kopiert.")
+    if backupziel.aktuell():
+        try:
+            neu = backupziel.hochladen(mandant, ziel)
+        except BereitstellungsFehler as e:
+            mandant.protokollieren(f"Sicherung lokal angelegt, aber der Upload zur Netzwerkfreigabe schlug fehl: {e}")
+            raise BereitstellungsFehler(f"Upload zur Netzwerkfreigabe fehlgeschlagen: {e}")
+        mandant.protokollieren(f"Sicherung auf der Netzwerkfreigabe abgelegt ({neu} neue Datei(en)).")
+    mandant.sicherung_am = timezone.now()
+    mandant.save(update_fields=["sicherung_am"])
     return ziel
 
 

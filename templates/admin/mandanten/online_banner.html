@@ -1,0 +1,8 @@
+{% if online_info.offline or online_info.backupziel_offline %}
+<div class="pv-update pv-update-fehler">
+  <strong>Nicht erreichbar:</strong>
+  {% for m in online_info.offline %}<span class="pv-chip">{{ m.kuerzel }}{% if m.offline_seit %} <small>seit {{ m.offline_seit|date:"d.m. H:i" }}</small>{% endif %}</span>{% endfor %}
+  {% if online_info.backupziel_offline %}<span class="pv-chip">Backup-Ziel <small>{{ online_info.backupziel_fehler|truncatechars:80 }}</small></span>{% endif %}
+  {% if online_info.zuletzt %}<span class="pv-update-ergebnis">Letzte Prüfung {{ online_info.zuletzt|date:"d.m.Y H:i" }}</span>{% endif %}
+</div>
+{% endif %}

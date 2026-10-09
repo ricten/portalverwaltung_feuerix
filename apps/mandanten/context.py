@@ -14,4 +14,12 @@ def update_info(request):
     if request.path not in (reverse("admin:index"), reverse("admin:mandanten_mandantinstanz_changelist")):
         return {}
     from . import updates
-    return {"update": updates.fuer_anzeige()}
+    from .models import BackupZiel, MandantInstanz
+    offline = list(MandantInstanz.objects.filter(status="laeuft", online=False))
+    ziel = BackupZiel.objects.filter(pk=1, aktiv=True).first()
+    zeiten = [m.online_geprueft_am for m in offline if m.online_geprueft_am]
+    if ziel and ziel.online_geprueft_am:
+        zeiten.append(ziel.online_geprueft_am)
+    online_info = {"offline": offline, "backupziel_offline": bool(ziel and ziel.online is False),
+                   "backupziel_fehler": ziel.online_fehler if ziel else "", "zuletzt": max(zeiten, default=None)}
+    return {"update": updates.fuer_anzeige(), "online_info": online_info}

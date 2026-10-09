@@ -1,3 +1,6 @@
+import re
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -74,6 +77,12 @@ class MandantInstanz(models.Model):
     feuerix_version = models.CharField("Bereitgestellte Feuerix-Version", max_length=20, blank=True,
                                        editable=False)
 
+    sicherung_am = models.DateTimeField("Letzte erfolgreiche Sicherung", null=True, blank=True, editable=False)
+
+    online = models.BooleanField("Erreichbar (letzter Check)", null=True, blank=True, editable=False)
+    online_geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True, editable=False)
+    offline_seit = models.DateTimeField("Offline seit", null=True, blank=True, editable=False)
+
     erstellt_am = models.DateTimeField("Erstellt am", auto_now_add=True)
     aktualisiert_am = models.DateTimeField("Zuletzt geändert", auto_now=True)
 
@@ -91,11 +100,14 @@ class MandantInstanz(models.Model):
 
     @property
     def letzte_sicherung(self):
-        """Zeitpunkt der neuesten Sicherungsdatei in INSTANZEN_VERZEICHNIS/<kuerzel>/backups (oder None)."""
+        """Zeitpunkt der letzten Sicherung (oder None). Mit aktivem Backup-Ziel zaehlt nur eine erfolgreich auf die
+        Netzwerkfreigabe hochgeladene Sicherung; sonst die neueste Datei in INSTANZEN_VERZEICHNIS/<kuerzel>/backups."""
         from datetime import datetime, timezone as tz
         from pathlib import Path
 
         from django.conf import settings
+        if BackupZiel.objects.filter(pk=1, aktiv=True).exists():
+            return self.sicherung_am
         verz = Path(settings.INSTANZEN_VERZEICHNIS) / self.kuerzel / "backups"
         try:
             zeiten = [f.stat().st_mtime for f in verz.iterdir() if f.is_file()]
@@ -161,3 +173,64 @@ class UpdateZustand(models.Model):
     @property
     def rollout_empfohlen(self):
         return self.update_verfuegbar or bool(self.veraltete_instanzen)
+
+
+_SERVER = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.\-]*[A-Za-z0-9])?$")
+_FREIGABE = re.compile(r'^[^\\/:*?"<>|\x00-\x1f]+$')
+
+
+class BackupZiel(models.Model):
+    """Einzeilige Einstellung (pk=1): Sicherungen zusaetzlich auf einer SMB-Netzwerkfreigabe ablegen."""
+    aktiv = models.BooleanField("Sicherungen auf Netzwerkfreigabe ablegen", default=False,
+                                help_text="Neue Sicherungen werden nach dem Anlegen zusätzlich dorthin hochgeladen. "
+                                          "Ist das Ziel aktiv, gilt eine Sicherung erst als aktuell, wenn der Upload "
+                                          "geklappt hat - schlägt er fehl, wird kein Update durchgeführt.")
+    server = models.CharField("Server", max_length=200, blank=True,
+                              help_text="Hostname oder IP-Adresse des SMB-Servers, z. B. nas.local oder 192.168.1.20.")
+    freigabe = models.CharField("Freigabe", max_length=100, blank=True,
+                                help_text="Name der Freigabe (Share), z. B. backups.")
+    unterordner = models.CharField("Unterordner", max_length=200, blank=True,
+                                   help_text="Optional, z. B. feuerix/portal. Darin legt das Portal je Instanz einen "
+                                             "Ordner mit dem Kürzel an.")
+    benutzer = models.CharField("Benutzer", max_length=200, blank=True,
+                                help_text="Benutzername, mit Domäne z. B. DOMÄNE\\benutzer.")
+    passwort = VerschluesseltesTextField("Passwort", blank=True, editable=False)
+    aufbewahrung_tage = models.PositiveIntegerField(
+        "Aufbewahrung (Tage)", default=0,
+        help_text="Sicherungen auf der Freigabe, die älter sind, werden gelöscht. 0 = nie löschen.")
+    lokal_loeschen = models.BooleanField(
+        "Lokale Kopie nach erfolgreichem Upload löschen", default=False,
+        help_text="Spart Speicherplatz auf dem Server; die Sicherungen liegen dann nur noch auf der Freigabe.")
+
+    online = models.BooleanField("Erreichbar (letzter Check)", null=True, blank=True, editable=False)
+    online_geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True, editable=False)
+    online_fehler = models.CharField("Fehler des letzten Checks", max_length=500, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "Backup-Ziel"
+        verbose_name_plural = "Backup-Ziel"
+
+    def __str__(self):
+        return f"\\\\{self.server}\\{self.freigabe}" if self.server else "Kein Backup-Ziel eingerichtet"
+
+    @classmethod
+    def holen(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def unterordner_teile(self):
+        return [t for t in re.split(r"[\\/]+", self.unterordner.strip()) if t]
+
+    def clean(self):
+        fehler = {}
+        if self.server and not _SERVER.match(self.server.strip()):
+            fehler["server"] = "Nur Hostname oder IP-Adresse (Buchstaben, Ziffern, Punkt, Bindestrich)."
+        if self.freigabe and not _FREIGABE.match(self.freigabe.strip()):
+            fehler["freigabe"] = "Nur der Name der Freigabe, ohne Schrägstriche oder Sonderzeichen."
+        if any(t == ".." or t == "." or not _FREIGABE.match(t) for t in self.unterordner_teile()):
+            fehler["unterordner"] = "Ungültiger Ordnerpfad (kein „..“, keine Sonderzeichen)."
+        if self.aktiv:
+            for feld, text in (("server", "Server"), ("freigabe", "Freigabe"), ("benutzer", "Benutzer")):
+                if not getattr(self, feld).strip():
+                    fehler.setdefault(feld, f"{text} ist nötig, wenn das Ziel aktiv ist.")
+        if fehler:
+            raise ValidationError(fehler)

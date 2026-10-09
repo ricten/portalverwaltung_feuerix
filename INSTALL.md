@@ -77,6 +77,47 @@ laufenden Instanzen werden nacheinander aktualisiert. Ohne Admin: `./venv/bin/py
 --ausrollen`. Voraussetzung: der Feuerix-Checkout hat einen Upstream-Zweig (ein normaler `git clone`) und der Server
 erreicht GitHub. Die Prüfung lässt sich mit `UPDATE_PRUEFUNG_STUNDEN=0` in der `.env` abschalten.
 
+## Online-Check nachträglich einrichten
+
+Der Installer richtet den Check (alle 5 Minuten) auf Wunsch ein. Bei einer bestehenden Installation:
+
+```bash
+sudo tee /etc/systemd/system/portal-check.service >/dev/null <<EOF
+[Unit]
+Description=Portalverwaltung Online-Check
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+User=$USER
+WorkingDirectory=/opt/verein
+EnvironmentFile=/opt/verein/.env
+ExecStart=/opt/verein/venv/bin/python manage.py mandant_online_check
+EOF
+sudo tee /etc/systemd/system/portal-check.timer >/dev/null <<EOF
+[Unit]
+Description=Portalverwaltung Online-Check alle 5 Minuten
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now portal-check.timer
+```
+
+Status: `systemctl list-timers portal-check.timer`, Ergebnis: `./venv/bin/python manage.py mandant_online_check`.
+
+## Backup-Ziel (Netzwerkfreigabe)
+
+Im Admin unter **Backup-Ziel**: Server (Hostname/IP), Freigabe, optionaler Unterordner, Benutzer und Passwort eintragen, **Aktiv**
+anhaken und mit **Speichern und Verbindung testen** prüfen. Unterstützt wird SMB/CIFS (Windows-Freigabe, NAS, Samba), kein
+NFS. Das Portal schreibt direkt per SMB (nichts wird gemountet); der Benutzer braucht Schreibrechte auf die Freigabe. Je Instanz
+entsteht ein Ordner mit dem Kürzel. Nach `git pull` einmal `./venv/bin/pip install -r requirements.txt` und `migrate`.
+
 ## Fehlerbehebung
 
 | Meldung / Symptom | Ursache und Lösung |

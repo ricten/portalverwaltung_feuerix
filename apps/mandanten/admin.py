@@ -6,9 +6,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import betrieb, provisioning, tasks, updates
+from . import backupziel, betrieb, provisioning, tasks, updates
 from .basis import WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
-from .models import MandantInstanz, UpdateZustand
+from .models import BackupZiel, MandantInstanz, UpdateZustand
 
 
 class MandantForm(forms.ModelForm):
@@ -338,3 +338,51 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(
                 request, f"{m.kuerzel}: neues Passwort für Benutzer „{m.admin_benutzername}“: {neu} - "
                          "wird nur jetzt angezeigt, bitte sicher weitergeben.", messages.WARNING)
+
+
+class BackupZielForm(forms.ModelForm):
+    passwort_neu = forms.CharField(
+        label="Passwort", required=False, widget=forms.PasswordInput(render_value=False),
+        help_text="Leer lassen, um das gespeicherte Passwort zu behalten. Es wird verschlüsselt gespeichert.")
+
+    class Meta:
+        model = BackupZiel
+        fields = ["aktiv", "server", "freigabe", "unterordner", "benutzer", "aufbewahrung_tage", "lokal_loeschen"]
+
+    def clean(self):
+        daten = super().clean()
+        if daten.get("aktiv") and not (daten.get("passwort_neu") or self.instance.passwort):
+            self.add_error("passwort_neu", "Ein Passwort ist nötig, wenn das Ziel aktiv ist.")
+        return daten
+
+
+@admin.register(BackupZiel)
+class BackupZielAdmin(admin.ModelAdmin):
+    """Eine einzige Einstellung: die Liste fuehrt direkt zum Formular."""
+    form = BackupZielForm
+    fields = ["aktiv", "server", "freigabe", "unterordner", "benutzer", "passwort_neu", "aufbewahrung_tage",
+              "lokal_loeschen"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        ziel = BackupZiel.holen()
+        return HttpResponseRedirect(reverse("admin:mandanten_backupziel_change", args=[ziel.pk]))
+
+    def save_model(self, request, obj, form, change):
+        if form.cleaned_data.get("passwort_neu"):
+            obj.passwort = form.cleaned_data["passwort_neu"]
+        super().save_model(request, obj, form, change)
+
+    def response_change(self, request, obj):
+        if "_testen" in request.POST:
+            try:
+                self.message_user(request, backupziel.testen(obj), messages.SUCCESS)
+            except BereitstellungsFehler as e:
+                self.message_user(request, f"Test fehlgeschlagen - {e}", messages.ERROR)
+            return HttpResponseRedirect(request.path)
+        return super().response_change(request, obj)
