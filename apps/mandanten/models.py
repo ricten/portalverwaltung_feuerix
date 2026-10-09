@@ -39,8 +39,11 @@ class MandantInstanz(models.Model):
     # Optionale Zusatzdienste (Ausbaustufe 2): leere Domain = Dienst aus.
     paperless_domain = models.CharField(
         "Paperless-Domain", max_length=200, blank=True, validators=[gueltige_domain],
-        help_text="Leer = kein Paperless-ngx. Sonst eigener Compose-Stack je Mandant, automatisch im Reverse "
-                  "Proxy eingetragen und in Feuerix (Verwaltung › Paperless-Anbindung) hinterlegt.")
+        help_text="Nur ausfüllen, wenn Paperless unter einer eigenen Adresse laufen soll (z. B. "
+                  "dokumente.verein.de) oder du einen anderen Namen als den Vorschlag möchtest. Wird Paperless "
+                  "über den Haken „Paperless-ngx installieren“ installiert, bleibt das Feld leer - es wird dann "
+                  "automatisch paperless.<Domain> verwendet. Die Installation, den Reverse-Proxy-Eintrag und die "
+                  "Anbindung in Feuerix übernimmt das Portal.")
     paperless_port = models.PositiveIntegerField("Paperless-Port", null=True, blank=True, editable=False)
     paperless_secret_key = VerschluesseltesTextField("Paperless SECRET_KEY", blank=True, editable=False)
     paperless_postgres_passwort = VerschluesseltesTextField("Paperless Postgres-Passwort", blank=True,
@@ -49,8 +52,11 @@ class MandantInstanz(models.Model):
 
     openslides_domain = models.CharField(
         "OpenSlides-Domain", max_length=200, blank=True, validators=[gueltige_domain],
-        help_text="Leer = kein OpenSlides. Sonst eigener OpenSlides-4-Stack je Mandant, automatisch im "
-                  "Reverse Proxy eingetragen und in Feuerix (Verwaltung › OpenSlides-Anbindung) hinterlegt.")
+        help_text="Nur ausfüllen, wenn OpenSlides unter einer eigenen Adresse laufen soll (z. B. "
+                  "versammlung.verein.de) oder du einen anderen Namen als den Vorschlag möchtest. Wird OpenSlides "
+                  "über den Haken „OpenSlides installieren“ installiert, bleibt das Feld leer - es wird dann "
+                  "automatisch openslides.<Domain> verwendet. Die Installation, den Reverse-Proxy-Eintrag und die "
+                  "Anbindung in Feuerix übernimmt das Portal.")
     openslides_port = models.PositiveIntegerField("OpenSlides-Port", null=True, blank=True, editable=False)
     openslides_superadmin_passwort = VerschluesseltesTextField("OpenSlides Superadmin-Passwort", blank=True,
                                                                editable=False)
