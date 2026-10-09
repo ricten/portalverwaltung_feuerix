@@ -357,3 +357,50 @@ class ZeilenknoepfeTests(TestCase):
         self.assertEqual(self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/loeschen/").status_code, 403)
         self.client.force_login(get_user_model().objects.create_user("ro", is_staff=True))
         self.assertEqual(self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/stoppen/").status_code, 403)
+
+
+class StoppenFortschrittTests(TestCase):
+    def test_stoppen_meldet_schritte_und_endet_auf_gestoppt(self):
+        schritte = []
+        orig = betrieb.basis.fortschritt
+
+        def merken(mandant, prozent, text):
+            schritte.append((mandant.status, prozent, text))
+            orig(mandant, prozent, text)
+
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _m("sf1", paperless_domain="p.sf1.example.org")
+            _feuerix(tmp, m)
+            with patch("apps.mandanten.basis.subprocess.run",
+                       return_value=MagicMock(returncode=0, stdout="", stderr="")), \
+                 patch("apps.mandanten.betrieb.basis.fortschritt", side_effect=merken), \
+                 patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=False):
+                betrieb.stoppen(m)
+        self.assertTrue(all(s[0] == "wird_bereitgestellt" for s in schritte))
+        self.assertEqual([s[1] for s in schritte], [40, 70, 95])
+        m.refresh_from_db()
+        self.assertEqual(m.status, "gestoppt")
+
+    def test_fehler_beim_stoppen_markiert_fehlgeschlagen(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _m("sf2")
+            _feuerix(tmp, m)
+            with patch("apps.mandanten.basis.subprocess.run",
+                       return_value=MagicMock(returncode=1, stdout="", stderr="kaputt")), \
+                 patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=False):
+                with self.assertRaises(BereitstellungsFehler):
+                    betrieb.stoppen(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "fehlgeschlagen")
+        self.assertIn("Stoppen fehlgeschlagen bei", m.schritt)
+
+    def test_admin_merkt_auch_das_stoppen_sofort_vor(self):
+        m = _m("sf3")
+        admin = site._registry[MandantInstanz]
+        request = RequestFactory().post("/")
+        request.user = get_user_model().objects.create_superuser("sf", "s@example.org", "x")
+        request._messages = MagicMock()
+        with patch("apps.mandanten.tasks.mandant_stoppen_task.delay"):
+            admin.stoppen(request, MandantInstanz.objects.filter(pk=m.pk))
+        m.refresh_from_db()
+        self.assertEqual(m.status, "wird_bereitgestellt")

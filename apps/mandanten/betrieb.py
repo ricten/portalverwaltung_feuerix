@@ -75,14 +75,27 @@ def update_ausrollen(mandant, _pruefen=True):
 def stoppen(mandant):
     """Haelt alle Container der Instanz (Feuerix, Paperless, OpenSlides) an - Daten und Container bleiben
     erhalten - und nimmt sie aus dem Reverse Proxy. Schneller als Pausieren (Abbau) und mit `starten` sofort
-    wieder da."""
+    wieder da. Meldet den Fortschritt (Spalte "Fortschritt")."""
+    mandant.status = "wird_bereitgestellt"
+    mandant.save(update_fields=["status"])
     try:
-        openslides.steuern(mandant, "stop")
-        paperless.steuern(mandant, "stop")
+        if openslides.aktiv(mandant):
+            basis.fortschritt(mandant, 10, "OpenSlides stoppen")
+            openslides.steuern(mandant, "stop")
+        if paperless.aktiv(mandant):
+            basis.fortschritt(mandant, 40, "Paperless stoppen")
+            paperless.steuern(mandant, "stop")
+        basis.fortschritt(mandant, 70, "Feuerix stoppen")
         provisioning.stack_steuern(mandant, "stop")
     except BereitstellungsFehler as e:
+        # Teilweise gestoppt: Zustand unklar, deshalb "fehlgeschlagen" (Wartungsseite) statt "laeuft"
+        mandant.status = "fehlgeschlagen"
+        mandant.schritt = f"Stoppen fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.save(update_fields=["status", "schritt"])
         mandant.protokollieren(f"Fehler beim Stoppen: {e}")
+        provisioning.proxy_nachziehen_best_effort(mandant)
         raise
+    basis.fortschritt(mandant, 95, "Reverse Proxy aktualisieren")
     mandant.status = "gestoppt"
     mandant.fortschritt, mandant.schritt = 0, ""
     mandant.save(update_fields=["status", "fortschritt", "schritt"])

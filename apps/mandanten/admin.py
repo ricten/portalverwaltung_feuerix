@@ -184,8 +184,9 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         if not obj.pk or obj.status in ("neu", "geloescht"):
             return "-"
         url = reverse("admin:mandanten_status", args=[obj.pk])
-        text = f"{obj.get_status_display()}" + (f" - {obj.schritt}" if obj.schritt else "") \
-            + f" ({obj.fortschritt} %)"
+        text = f"{obj.get_status_display()}" + (f" - {obj.schritt}" if obj.schritt else "")
+        if obj.status not in ("gestoppt", "pausiert"):
+            text += f" ({obj.fortschritt} %)"
         laeuft = obj.status == "wird_bereitgestellt"
         return format_html(
             '<div class="pv-fortschritt" {}><div class="pv-balken"><div style="width:{}%"></div></div>'
@@ -248,10 +249,9 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                 self.message_user(request, f"{m.kuerzel}: {text} nicht möglich im Status „{m.get_status_display()}“.",
                                   messages.WARNING)
                 continue
-            if task is not tasks.mandant_stoppen_task:
-                # sofort sichtbar machen, damit die Oberflaeche den Fortschritt live anzeigen kann
-                m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
-                m.save(update_fields=["status", "fortschritt", "schritt"])
+            # sofort sichtbar machen, damit die Oberflaeche den Fortschritt live anzeigen kann
+            m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
+            m.save(update_fields=["status", "fortschritt", "schritt"])
             task.delay(m.pk)
             gestartet.append(m.kuerzel)
         if gestartet:

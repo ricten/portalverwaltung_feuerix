@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.16.0 (2026-10-10)
+- Neu: **Stoppen** zeigt jetzt wie Starten und Neustart einen Fortschritt in der Spalte „Fortschritt“ (OpenSlides, Paperless,
+  Feuerix stoppen, Reverse Proxy aktualisieren). Scheitert das Stoppen, wird die Instanz „Fehlgeschlagen“.
+- Der Zwischenstatus heißt jetzt „In Arbeit“ (statt „Wird bereitgestellt“), weil er auch bei Update, Stoppen, Starten und
+  Neustart gilt. Gestoppte/pausierte Instanzen zeigen keine Prozentzahl mehr. Migration 0008 (nur die Statusbezeichnung).
+
 ## 0.15.1 (2026-10-10)
 - Fix: Das Update einer **einzelnen** Instanz (Knopf in der Versionsspalte, Admin-Aktion) zieht jetzt zuerst den neuen
   Feuerix-Code (`git pull --ff-only`, falls der Remote neuer ist). Bisher wurde nur mit dem vorhandenen Checkout neu

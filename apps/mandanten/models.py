@@ -6,7 +6,7 @@ from .validatoren import gueltige_domain, keine_env_sonderzeichen
 
 STATUS = [
     ("neu", "Neu (noch nicht bereitgestellt)"),
-    ("wird_bereitgestellt", "Wird bereitgestellt"),
+    ("wird_bereitgestellt", "In Arbeit"),
     ("laeuft", "Läuft"),
     ("fehlgeschlagen", "Fehlgeschlagen"),
     ("gestoppt", "Gestoppt (Container angehalten)"),
