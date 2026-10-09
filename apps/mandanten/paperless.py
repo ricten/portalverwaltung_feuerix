@@ -102,6 +102,17 @@ def hochfahren(mandant):
     mandant.protokollieren(f"Paperless-Stack '{projektname(mandant)}' gestartet.")
 
 
+_STEUERN = {"stop": ["stop"], "start": ["up", "-d"], "restart": ["restart"]}
+
+
+def steuern(mandant, aktion):
+    if not aktiv(mandant) or not (_verzeichnis(mandant) / ".env").exists():
+        return
+    befehl, cwd = _compose_basis(mandant)
+    basis.docker(befehl + _STEUERN[aktion], f"Paperless: docker compose {aktion}", timeout=300, cwd=cwd)
+    mandant.protokollieren(f"Paperless-Stack '{projektname(mandant)}': {aktion}.")
+
+
 def abbauen(mandant, daten_loeschen=False):
     if not aktiv(mandant) or not (_verzeichnis(mandant) / ".env").exists():
         return

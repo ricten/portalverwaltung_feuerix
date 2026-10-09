@@ -174,6 +174,18 @@ def bereitstellen(mandant, feuerix_compose_basis):
     in_feuerix_eintragen(mandant, feuerix_compose_basis)
 
 
+_STEUERN = {"stop": ["stop"], "start": ["up", "--detach"], "restart": ["restart"]}
+
+
+def steuern(mandant, aktion):
+    verz = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel / "openslides"
+    if not aktiv(mandant) or not (verz / "docker-compose.yml").exists():
+        return
+    basis.docker(["docker", "compose"] + _STEUERN[aktion], f"OpenSlides: docker compose {aktion}", timeout=300,
+                 cwd=verz, env=_env(mandant))
+    mandant.protokollieren(f"OpenSlides-Stack '{projektname(mandant)}': {aktion}.")
+
+
 def abbauen(mandant, daten_loeschen=False):
     verz = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel / "openslides"
     if not aktiv(mandant) or not (verz / "docker-compose.yml").exists():

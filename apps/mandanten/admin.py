@@ -47,7 +47,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                        "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "pausieren", "sichern", "aktualisieren", "zugangsdaten_anzeigen",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "pausieren", "sichern", "aktualisieren", "zugangsdaten_anzeigen",
                "admin_passwort_zuruecksetzen"]
 
     class Media:
@@ -125,6 +125,36 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
             m.save(update_fields=["status", "fortschritt", "schritt"])
         self._starten(request, queryset, tasks.mandant_bereitstellen_task, "Bereitstellung")
+
+    def _steuern(self, request, queryset, erlaubt, task, text):
+        gestartet = []
+        for m in queryset:
+            if m.status not in erlaubt:
+                self.message_user(request, f"{m.kuerzel}: {text} nicht möglich im Status „{m.get_status_display()}“.",
+                                  messages.WARNING)
+                continue
+            if task is not tasks.mandant_stoppen_task:
+                # sofort sichtbar machen, damit die Oberflaeche den Fortschritt live anzeigen kann
+                m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, "In der Warteschlange"
+                m.save(update_fields=["status", "fortschritt", "schritt"])
+            task.delay(m.pk)
+            gestartet.append(m.kuerzel)
+        if gestartet:
+            self.message_user(request, f"{text} gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
+                                       "„Fortschritt“.", messages.INFO)
+
+    @admin.action(description="Starten (gestoppte/pausierte Instanz)")
+    def starten(self, request, queryset):
+        self._steuern(request, queryset, ("gestoppt", "pausiert", "fehlgeschlagen"), tasks.mandant_starten_task,
+                      "Starten")
+
+    @admin.action(description="Stoppen (Container anhalten, Daten bleiben)")
+    def stoppen(self, request, queryset):
+        self._steuern(request, queryset, ("laeuft", "fehlgeschlagen"), tasks.mandant_stoppen_task, "Stoppen")
+
+    @admin.action(description="Neustarten")
+    def neustarten(self, request, queryset):
+        self._steuern(request, queryset, ("laeuft", "fehlgeschlagen"), tasks.mandant_neustarten_task, "Neustarten")
 
     @admin.action(description="Pausieren (Daten bleiben erhalten)")
     def pausieren(self, request, queryset):

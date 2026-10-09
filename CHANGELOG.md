@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.10.0 (2026-10-09)
+- Neu: Admin-Aktionen **Starten**, **Stoppen** und **Neustarten** für Instanzen (inkl. Paperless/OpenSlides), mit
+  Fortschrittsbalken. Stoppen hält nur die Container an (neuer Status „Gestoppt“, Instanz verlässt den Reverse
+  Proxy); Starten und Neustarten bauen nichts neu. „Pausieren“ bleibt der vollständige Abbau (Container entfernt,
+  Daten bleiben).
+- Neu: `manage.py mandant_dienst <kürzel> stop|start|restart`.
+- Datenbank-Migration 0005 (nur Auswahlliste des Status, keine Datenänderung).
+
 ## 0.9.0 (2026-10-09)
 - Neu: Die Version der Portalverwaltung steht in der Fußzeile der Weboberfläche (Quelle: `VERSION.md`).
 - Neu: `INSTALL.md` mit Voraussetzungen, Installation, Update, Fehlerbehebung und manueller Installation;

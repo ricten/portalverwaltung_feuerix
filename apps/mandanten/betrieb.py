@@ -6,7 +6,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-from . import basis, provisioning
+from . import basis, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
@@ -62,6 +62,63 @@ def update_ausrollen(mandant):
     mandant.feuerix_version = provisioning.feuerix_version()
     mandant.save(update_fields=["feuerix_version"])
     mandant.protokollieren(f"Update auf Feuerix {mandant.feuerix_version or '?'} ausgerollt.")
+
+
+def stoppen(mandant):
+    """Haelt alle Container der Instanz (Feuerix, Paperless, OpenSlides) an - Daten und Container bleiben
+    erhalten - und nimmt sie aus dem Reverse Proxy. Schneller als Pausieren (Abbau) und mit `starten` sofort
+    wieder da."""
+    try:
+        openslides.steuern(mandant, "stop")
+        paperless.steuern(mandant, "stop")
+        provisioning.stack_steuern(mandant, "stop")
+    except BereitstellungsFehler as e:
+        mandant.protokollieren(f"Fehler beim Stoppen: {e}")
+        raise
+    mandant.status = "gestoppt"
+    mandant.fortschritt, mandant.schritt = 0, ""
+    mandant.save(update_fields=["status", "fortschritt", "schritt"])
+    provisioning._proxy_nachziehen(mandant)
+
+
+def _hochfahren(mandant, aktion, text):
+    """Gemeinsamer Ablauf fuer Starten/Neustarten: Stacks steuern, auf Bereitschaft warten, Proxy nachziehen."""
+    mandant.status = "wird_bereitgestellt"
+    mandant.save(update_fields=["status"])
+    try:
+        basis.fortschritt(mandant, 10, f"Feuerix: {text}")
+        provisioning.stack_steuern(mandant, aktion)
+        basis.fortschritt(mandant, 30, "Feuerix: warten, bis es antwortet")
+        provisioning.auf_bereitschaft_warten(mandant)
+        if paperless.aktiv(mandant):
+            basis.fortschritt(mandant, 55, f"Paperless: {text}")
+            paperless.steuern(mandant, aktion)
+            paperless.auf_bereitschaft_warten(mandant)
+        if openslides.aktiv(mandant):
+            basis.fortschritt(mandant, 80, f"OpenSlides: {text}")
+            openslides.steuern(mandant, aktion)
+            openslides.auf_bereitschaft_warten(mandant)
+        basis.fortschritt(mandant, 97, "Reverse Proxy eintragen")
+        mandant.status = "laeuft"
+        mandant.save(update_fields=["status"])
+        provisioning._proxy_nachziehen(mandant)
+        basis.fortschritt(mandant, 100, "Fertig")
+    except BereitstellungsFehler as e:
+        mandant.status = "fehlgeschlagen"
+        mandant.schritt = f"Fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.save(update_fields=["status", "schritt"])
+        mandant.protokollieren(f"Fehler: {e}")
+        raise
+
+
+def starten(mandant):
+    """Startet eine gestoppte oder pausierte Instanz (ohne Neubau) und traegt sie wieder im Proxy ein."""
+    _hochfahren(mandant, "start", "starten")
+
+
+def neustarten(mandant):
+    """Startet alle Container der Instanz neu (ohne Neubau)."""
+    _hochfahren(mandant, "restart", "neu starten")
 
 
 def alle_aktualisieren(pause_sekunden=10, git_pull=False):

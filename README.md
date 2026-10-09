@@ -51,7 +51,12 @@ Aktuell automatisiert:
     `INSTANZEN_VERZEICHNIS/<kürzel>/backups` kopiert (Paperless/OpenSlides-Daten: Volumes separat sichern)
   - `python manage.py mandant_update [--git-pull] [--pause 10]` – rollt den aktuellen Feuerix-Code gestaffelt auf
     alle laufenden Instanzen aus (Migrationen laufen beim Start; ein Fehler stoppt die anderen nicht)
-  - Django-Admin: Aktionen „Bereitstellen“, „Pausieren“, „Sichern“, „Aktualisieren“ (laufen über Celery)
+  - `python manage.py mandant_dienst <kürzel> stop|start|restart` – Instanz samt Paperless/OpenSlides anhalten,
+    wieder starten oder neu starten (Container und Daten bleiben, kein Neubau; gestoppte Instanzen verschwinden
+    aus dem Reverse Proxy und kommen beim Starten wieder hinein)
+  - Django-Admin: Aktionen „Bereitstellen“, „Starten“, „Stoppen“, „Neustarten“, „Pausieren“, „Sichern“,
+    „Aktualisieren“ (laufen über Celery). **Stoppen** hält die Container nur an (Status „Gestoppt“), **Pausieren**
+    baut sie ab (Status „Pausiert“, Daten bleiben); **Starten** geht aus beiden Zuständen.
 
 **Bewusst nicht enthalten**: Abrechnung/Tarife, Self-Service-Anmeldung für Vereine, automatische
 Zertifikats-/Backup-Rotation über 14 Sicherungen hinaus (das übernimmt Feuerix' `backup.sh` je Instanz).

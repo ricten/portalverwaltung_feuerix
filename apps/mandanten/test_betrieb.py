@@ -118,8 +118,72 @@ class AdminAktionTests(TestCase):
             admin.bereitstellen(request, MandantInstanz.objects.all())
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
-        self.assertEqual({"bereitstellen", "pausieren", "sichern", "aktualisieren", "zugangsdaten_anzeigen",
-                      "admin_passwort_zuruecksetzen"}, set(admin.actions))
+        self.assertEqual({"bereitstellen", "starten", "stoppen", "neustarten", "pausieren", "sichern",
+                          "aktualisieren", "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"},
+                         set(admin.actions))
+
+
+class StartenStoppenTests(TestCase):
+    def _lauf(self, funktion, status="laeuft", **kw):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _m(status=status, **kw)
+            _feuerix(tmp, m)
+            with patch("apps.mandanten.basis.subprocess.run",
+                       return_value=MagicMock(returncode=0, stdout="", stderr="")) as run,                  patch("apps.mandanten.provisioning.auf_bereitschaft_warten"),                  patch("apps.mandanten.provisioning.proxy.proxy_aktualisieren", return_value=False):
+                funktion(m)
+            m.refresh_from_db()
+            return m, [c.args[0] for c in run.call_args_list]
+
+    def test_stoppen_haelt_container_an_und_setzt_status(self):
+        m, befehle = self._lauf(betrieb.stoppen)
+        self.assertEqual(m.status, "gestoppt")
+        self.assertEqual(befehle[0][-1], "stop")
+        self.assertNotIn("down", befehle[0])
+
+    def test_starten_fuehrt_up_ohne_build_aus_und_laeuft_danach(self):
+        m, befehle = self._lauf(betrieb.starten, status="gestoppt")
+        self.assertEqual(m.status, "laeuft")
+        self.assertEqual(befehle[0][-2:], ["up", "-d"])
+        self.assertNotIn("--build", befehle[0])
+        self.assertEqual(m.fortschritt, 100)
+
+    def test_neustarten(self):
+        m, befehle = self._lauf(betrieb.neustarten)
+        self.assertEqual(m.status, "laeuft")
+        self.assertEqual(befehle[0][-1], "restart")
+
+    def test_fehler_beim_starten_setzt_fehlgeschlagen(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _m(status="gestoppt")
+            _feuerix(tmp, m)
+            with patch("apps.mandanten.basis.subprocess.run",
+                       return_value=MagicMock(returncode=1, stdout="", stderr="kaputt")):
+                with self.assertRaises(BereitstellungsFehler):
+                    betrieb.starten(m)
+            m.refresh_from_db()
+            self.assertEqual(m.status, "fehlgeschlagen")
+
+    def test_admin_aktion_prueft_den_status(self):
+        gestoppt = _m("g1", status="gestoppt")
+        laeuft = _m("l1", status="laeuft")
+        admin = site._registry[MandantInstanz]
+        request = RequestFactory().post("/")
+        request.user = get_user_model().objects.create_superuser("a2", "a@example.org", "x")
+        request._messages = MagicMock()
+        with patch("apps.mandanten.tasks.mandant_stoppen_task.delay") as stoppen:
+            admin.stoppen(request, MandantInstanz.objects.all())
+        stoppen.assert_called_once_with(laeuft.pk)
+        with patch("apps.mandanten.tasks.mandant_starten_task.delay") as starten:
+            admin.starten(request, MandantInstanz.objects.all())
+        starten.assert_called_once_with(gestoppt.pk)
+        gestoppt.refresh_from_db()
+        self.assertEqual(gestoppt.status, "wird_bereitgestellt")
+
+    def test_befehl(self):
+        _m(status="laeuft")
+        with patch("apps.mandanten.betrieb.stoppen") as stoppen,              patch.dict("apps.mandanten.management.commands.mandant_dienst.AKTIONEN", {"stop": stoppen}):
+            call_command("mandant_dienst", "b1", "stop", stdout=io.StringIO())
+        stoppen.assert_called_once()
 
 
 @override_settings(PORTAL_DOMAIN="portal.example.org", PORTAL_PORT=8000, PROXY_NUR_HTTP=False)

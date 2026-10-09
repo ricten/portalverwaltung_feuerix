@@ -55,7 +55,9 @@ Benutzername und Passwort des Portal-Administrators. Mehrfaches Ausführen ist m
    Optional die Haken **Paperless-ngx** / **OpenSlides** setzen.
 3. Instanz in der Liste markieren → Aktion **Bereitstellen**. Der Fortschrittsbalken zeigt die Schritte; der erste Lauf
    baut das Feuerix-Image und dauert einige Minuten.
-4. Aktion **Zugangsdaten des Instanz-Administrators anzeigen** zeigt Adresse, Benutzer und Startpasswort der neuen
+4. Im Betrieb: Aktionen **Stoppen**, **Starten** und **Neustarten** (auf der Kommandozeile
+   `manage.py mandant_dienst <kürzel> stop|start|restart`). Datenbank und Medien bleiben dabei erhalten.
+5. Aktion **Zugangsdaten des Instanz-Administrators anzeigen** zeigt Adresse, Benutzer und Startpasswort der neuen
    Instanz (nur für Superuser).
 
 ## Aktualisieren

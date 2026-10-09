@@ -27,6 +27,21 @@ def mandant_pausieren_task(mandant_id):
 
 
 @shared_task
+def mandant_stoppen_task(mandant_id):
+    _ausfuehren(betrieb.stoppen, mandant_id, protokollieren=False)
+
+
+@shared_task
+def mandant_starten_task(mandant_id):
+    _ausfuehren(betrieb.starten, mandant_id, protokollieren=False)
+
+
+@shared_task
+def mandant_neustarten_task(mandant_id):
+    _ausfuehren(betrieb.neustarten, mandant_id, protokollieren=False)
+
+
+@shared_task
 def mandant_backup_task(mandant_id):
     _ausfuehren(betrieb.backup, mandant_id, protokollieren=True)
 

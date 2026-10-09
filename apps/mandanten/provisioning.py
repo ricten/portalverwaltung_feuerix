@@ -157,6 +157,15 @@ def stack_hochfahren(mandant):
     mandant.protokollieren(f"Docker-Compose-Stack '{mandant.docker_projekt}' gestartet.")
 
 
+_STEUERN = {"stop": ["stop"], "start": ["up", "-d"], "restart": ["restart"]}
+
+
+def stack_steuern(mandant, aktion):
+    """Stoppt, startet (ohne Neubau) oder startet neu - nur die Container, nichts wird entfernt."""
+    docker(_compose_basis(mandant) + _STEUERN[aktion], f"docker compose {aktion}", timeout=300)
+    mandant.protokollieren(f"Stack '{mandant.docker_projekt}': {aktion}.")
+
+
 def stack_abbauen(mandant, daten_loeschen=False):
     """Stoppt und entfernt die Container; mit daten_loeschen auch die Volumes (Datenbank, Medien) -
     unwiderruflich."""

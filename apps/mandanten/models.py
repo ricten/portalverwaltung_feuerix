@@ -9,7 +9,8 @@ STATUS = [
     ("wird_bereitgestellt", "Wird bereitgestellt"),
     ("laeuft", "Läuft"),
     ("fehlgeschlagen", "Fehlgeschlagen"),
-    ("pausiert", "Pausiert (gestoppt, Daten erhalten)"),
+    ("gestoppt", "Gestoppt (Container angehalten)"),
+    ("pausiert", "Pausiert (abgebaut, Daten erhalten)"),
     ("geloescht", "Gelöscht (Daten entfernt)"),
 ]
 
