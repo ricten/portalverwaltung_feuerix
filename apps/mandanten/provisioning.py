@@ -149,6 +149,14 @@ def _compose_basis(mandant):
             "-f", str(compose_datei), "-f", str(override_datei)]
 
 
+def stack_bauen(mandant):
+    """Baut nur das Image mit dem aktuellen Code des Checkouts (ohne Container zu starten oder zu aendern) -
+    Update fuer eine gestoppte Instanz: beim naechsten Start (`up -d`) werden die Container aus dem neuen Image
+    angelegt, die Migrationen laufen dabei automatisch."""
+    docker(_compose_basis(mandant) + ["build"], "docker compose build")
+    mandant.protokollieren(f"Image fuer '{mandant.docker_projekt}' neu gebaut (Instanz bleibt gestoppt).")
+
+
 def stack_hochfahren(mandant):
     """Startet den Feuerix-Docker-Compose-Stack fuer diesen Mandanten unter einem eigenen Projektnamen -
     nutzt die docker-compose.yml aus dem konfigurierten Feuerix-Quellcode-Checkout direkt (kein Kopieren),

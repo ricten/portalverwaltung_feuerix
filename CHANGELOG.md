@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.18.0 (2026-10-10)
+- **Gestoppte Instanzen** werden jetzt bei der Update-Prüfung mitgezählt (die gespeicherte Feuerix-Version bleibt beim
+  Stoppen erhalten): Sie erscheinen im Update-Hinweis, die Versionsspalte zeigt den Update-Knopf, und der Gesamt-Rollout
+  nimmt sie mit. Das Update baut für sie nur das neue Image und lässt sie gestoppt (ohne Sicherung, da kein Datenzugriff);
+  beim nächsten Start läuft die neue Version samt Migrationen. Stillgelegte Instanzen werden weiterhin nicht beachtet.
+
 ## 0.17.0 (2026-10-10)
 - „Pausieren“ heißt jetzt **„Instanz stilllegen (Container entfernen, Daten behalten)“**, der Status **„Stillgelegt“**.
   Das Stilllegen zeigt wie Stoppen/Starten einen Fortschritt (OpenSlides, Paperless, Feuerix entfernen, Reverse Proxy

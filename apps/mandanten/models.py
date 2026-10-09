@@ -151,10 +151,12 @@ class UpdateZustand(models.Model):
 
     @property
     def veraltete_instanzen(self):
-        """Laufende Instanzen, die nicht auf der Zielversion sind."""
+        """Laufende und gestoppte Instanzen, die nicht auf der Zielversion sind (die gespeicherte Version bleibt
+        beim Stoppen erhalten; stillgelegte Instanzen werden bewusst nicht beachtet)."""
         if not self.ziel_version:
             return []
-        return list(MandantInstanz.objects.filter(status="laeuft").exclude(feuerix_version=self.ziel_version))
+        return list(MandantInstanz.objects.filter(status__in=("laeuft", "gestoppt"))
+                    .exclude(feuerix_version=self.ziel_version))
 
     @property
     def rollout_empfohlen(self):

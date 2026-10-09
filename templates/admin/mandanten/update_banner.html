@@ -14,7 +14,7 @@
     </strong>
     {% with veraltet=update.veraltete_instanzen %}
       {% if veraltet %}<div class="pv-update-liste">Zu aktualisieren:
-        {% for m in veraltet %}<span class="pv-chip">{{ m.kuerzel }} <small>({{ m.feuerix_version|default:"?" }}) · {% if m.sicherung_aktuell %}Sicherung aktuell{% else %}Sicherung wird vorher angelegt{% endif %}</small></span>{% endfor %}
+        {% for m in veraltet %}<span class="pv-chip">{{ m.kuerzel }} <small>({{ m.feuerix_version|default:"?" }}) · {% if m.status == "gestoppt" %}gestoppt, nur Image bauen{% elif m.sicherung_aktuell %}Sicherung aktuell{% else %}Sicherung wird vorher angelegt{% endif %}</small></span>{% endfor %}
       </div>{% endif %}
     {% endwith %}
     {% if update.aenderungen %}<details><summary>Änderungen anzeigen</summary><pre>{{ update.aenderungen }}</pre></details>{% endif %}

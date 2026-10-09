@@ -126,11 +126,12 @@ def ausrollen(pause_sekunden=None):
             schritt("Feuerix-Code aktualisieren (git pull)")
             _git(["pull", "--ff-only"], "git pull im Feuerix-Checkout", timeout=300)
         version = provisioning.feuerix_version()
-        ziele = list(MandantInstanz.objects.filter(status="laeuft").exclude(feuerix_version=version))
+        ziele = list(MandantInstanz.objects.filter(status__in=("laeuft", "gestoppt")).exclude(feuerix_version=version))
         ok, fehler = [], {}
         for nr, mandant in enumerate(ziele, 1):
             schritt(f"Instanz {nr} von {len(ziele)}: {mandant.kuerzel}"
-                   + ("" if mandant.sicherung_aktuell else " (Sicherung, dann Update)"))
+                   + (" (gestoppt: nur Image bauen)" if mandant.status == "gestoppt"
+                      else "" if mandant.sicherung_aktuell else " (Sicherung, dann Update)"))
             try:
                 betrieb.update_mit_sicherung(mandant)
                 ok.append(mandant.kuerzel)

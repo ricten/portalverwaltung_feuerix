@@ -111,7 +111,7 @@ class RolloutTests(TestCase):
     def test_pull_und_nur_veraltete_laufende_instanzen(self):
         a = _m("a", "1.58.0")
         _m("b", "1.59.0")
-        _m("c", "1.58.0", status="gestoppt")
+        _m("c", "1.58.0", status="pausiert")
         ergebnis, ausrollen, _ = self._lauf()
         ausrollen.assert_called_once()
         self.assertEqual(ausrollen.call_args.args[0].pk, a.pk)
@@ -306,7 +306,7 @@ class EinzelUpdateKnopfTests(TestCase):
         UpdateZustand.objects.update_or_create(pk=1, defaults=dict(lokale_version="1.58.0", remote_version="1.59.0"))
         veraltet = _m("alt", "1.58.0")
         _m("neu", "1.59.0")
-        _m("aus", "1.58.0", status="gestoppt")
+        _m("aus", "1.58.0", status="pausiert")
         html = self.client.get("/admin/mandanten/mandantinstanz/").content.decode()
         self.assertIn(f"/{veraltet.pk}/dienst/aktualisieren/", html)
         self.assertEqual(html.count("/dienst/aktualisieren/"), 1)
@@ -320,7 +320,7 @@ class EinzelUpdateKnopfTests(TestCase):
         delay.assert_called_once_with(m.pk)
 
     def test_klick_bei_nicht_laufender_instanz_tut_nichts(self):
-        m = _m("g", "1.58.0", status="gestoppt")
+        m = _m("g", "1.58.0", status="pausiert")
         with patch("apps.mandanten.tasks.mandant_update_task.delay") as delay:
             self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/")
         delay.assert_not_called()
@@ -456,3 +456,74 @@ class EinzelUpdatePullTests(TestCase):
         with patch("apps.mandanten.updates._git") as git:
             updates.checkout_aktualisieren()
         git.assert_not_called()
+
+
+class GestoppteInstanzUpdateTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_superuser("gi", "g@example.org", "pw"))
+
+    def test_gestoppte_instanz_zaehlt_als_veraltet_stillgelegte_nicht(self):
+        _m("g1", "1.58.0", status="gestoppt")
+        _m("g2", "1.58.0", status="pausiert")
+        z = UpdateZustand.objects.update_or_create(pk=1, defaults=dict(lokale_version="1.58.0",
+                                                                      remote_version="1.59.0"))[0]
+        self.assertEqual([m.kuerzel for m in z.veraltete_instanzen], ["g1"])
+
+    def test_update_baut_nur_das_image_und_laesst_die_instanz_gestoppt(self):
+        from . import betrieb
+        m = _m("g3", "1.58.0", status="gestoppt")
+        schritte = []
+        orig = betrieb.basis.fortschritt
+        with patch("apps.mandanten.betrieb.basis.fortschritt",
+                   side_effect=lambda mm, p, t: (schritte.append((mm.status, p)), orig(mm, p, t))), \
+             patch("apps.mandanten.betrieb.provisioning.stack_bauen") as bauen, \
+             patch("apps.mandanten.betrieb.provisioning.stack_hochfahren") as hoch, \
+             patch("apps.mandanten.betrieb.backup") as backup, \
+             patch("apps.mandanten.betrieb.provisioning.feuerix_version", return_value="1.59.0"):
+            betrieb.update_mit_sicherung(m)
+        bauen.assert_called_once()
+        hoch.assert_not_called()
+        backup.assert_not_called()
+        m.refresh_from_db()
+        self.assertEqual((m.status, m.feuerix_version, m.fortschritt, m.schritt), ("gestoppt", "1.59.0", 0, ""))
+        self.assertTrue(all(s[0] == "wird_bereitgestellt" for s in schritte))
+
+    def test_fehler_beim_bauen_laesst_die_instanz_gestoppt(self):
+        from . import betrieb
+        m = _m("g4", "1.58.0", status="gestoppt")
+        with patch("apps.mandanten.betrieb.provisioning.stack_bauen", side_effect=BereitstellungsFehler("kaputt")):
+            with self.assertRaises(BereitstellungsFehler):
+                betrieb.update_mit_sicherung(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "gestoppt")
+        self.assertEqual(m.feuerix_version, "1.58.0")
+        self.assertIn("Update fehlgeschlagen bei", m.schritt)
+
+    def test_knopf_und_vormerkung_fuer_gestoppte_instanz(self):
+        from .basis import WARTESCHLANGE_UPDATE_GESTOPPT
+        UpdateZustand.objects.update_or_create(pk=1, defaults=dict(lokale_version="1.58.0", remote_version="1.59.0"))
+        m = _m("g5", "1.58.0", status="gestoppt")
+        html = self.client.get("/admin/mandanten/mandantinstanz/").content.decode()
+        self.assertIn(f"/{m.pk}/dienst/aktualisieren/", html)
+        with patch("apps.mandanten.tasks.mandant_update_task.delay") as delay:
+            self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/")
+        delay.assert_called_once_with(m.pk)
+        m.refresh_from_db()
+        self.assertEqual((m.status, m.schritt), ("wird_bereitgestellt", WARTESCHLANGE_UPDATE_GESTOPPT))
+        from . import betrieb
+        self.assertEqual(betrieb._ausgangsstatus(m), "gestoppt")
+
+    def test_rollout_aktualisiert_auch_gestoppte(self):
+        g = _m("g6", "1.58.0", status="gestoppt")
+        with patch("apps.mandanten.updates._git", side_effect=_git_antworten(remote="1.58.0")), \
+             patch("apps.mandanten.provisioning.feuerix_version", return_value="1.58.0"), \
+             patch("apps.mandanten.updates.betrieb.update_mit_sicherung") as upd:
+            updates.ausrollen(pause_sekunden=0)
+        upd.assert_not_called()   # schon auf 1.58.0 -> nichts zu tun
+        g.feuerix_version = "1.57.0"
+        g.save()
+        with patch("apps.mandanten.updates._git", side_effect=_git_antworten(remote="1.58.0")), \
+             patch("apps.mandanten.provisioning.feuerix_version", return_value="1.58.0"), \
+             patch("apps.mandanten.updates.betrieb.update_mit_sicherung") as upd:
+            updates.ausrollen(pause_sekunden=0)
+        upd.assert_called_once()

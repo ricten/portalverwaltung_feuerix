@@ -11,9 +11,17 @@ from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
 
-def _update_erlaubt(mandant):
-    return mandant.status == "laeuft" or (
-        mandant.status == "wird_bereitgestellt" and mandant.schritt == basis.WARTESCHLANGE_UPDATE)
+def _ausgangsstatus(mandant):
+    """Status, in dem die Instanz vor dem Update war ("laeuft"/"gestoppt"), auch wenn sie fuer das Update schon
+    als "in der Warteschlange" vorgemerkt ist; sonst None (Update nicht moeglich)."""
+    if mandant.status in ("laeuft", "gestoppt"):
+        return mandant.status
+    if mandant.status == "wird_bereitgestellt":
+        if mandant.schritt == basis.WARTESCHLANGE_UPDATE:
+            return "laeuft"
+        if mandant.schritt == basis.WARTESCHLANGE_UPDATE_GESTOPPT:
+            return "gestoppt"
+    return None
 
 
 def backup(mandant, _pruefen=True):
@@ -144,40 +152,55 @@ def neustarten(mandant):
 
 
 def update_mit_sicherung(mandant, vorher=None):
-    """Aktualisiert eine Instanz mit sichtbarem Fortschritt: prueft zuerst, ob eine aktuelle Sicherung existiert
-    (UPDATE_BACKUP_MAX_ALTER_STUNDEN), legt bei Bedarf eine an und aktualisiert erst danach. Schlaegt die Sicherung
-    fehl, wird NICHT aktualisiert. Waehrend des Updates steht die Instanz auf "wird_bereitgestellt" (Balken).
+    """Aktualisiert eine Instanz mit sichtbarem Fortschritt (Status "wird_bereitgestellt" = In Arbeit).
+    Laufende Instanz: prueft zuerst, ob eine aktuelle Sicherung existiert (UPDATE_BACKUP_MAX_ALTER_STUNDEN), legt bei
+    Bedarf eine an und baut/startet dann neu; schlaegt die Sicherung fehl, wird NICHT aktualisiert.
+    Gestoppte Instanz: baut nur das Image neu und bleibt gestoppt (kein Datenzugriff, deshalb ohne Sicherung).
     `vorher` (optional) wird zuerst aufgerufen, z. B. um den Feuerix-Code zu ziehen."""
-    if not _update_erlaubt(mandant):
-        raise BereitstellungsFehler(f"Update nur fuer laufende Instanzen moeglich (Status: {mandant.status}).")
+    ausgang = _ausgangsstatus(mandant)
+    if ausgang is None:
+        raise BereitstellungsFehler(f"Update nur fuer laufende oder gestoppte Instanzen moeglich "
+                                    f"(Status: {mandant.status}).")
     mandant.status = "wird_bereitgestellt"
     mandant.save(update_fields=["status"])
     try:
         if vorher:
             basis.fortschritt(mandant, 3, "Update: neuen Code holen (git pull)")
             vorher()
-        basis.fortschritt(mandant, 5, "Update: Sicherung prüfen")
-        if not mandant.sicherung_aktuell:
-            basis.fortschritt(mandant, 10, "Update: Sicherung anlegen (keine aktuelle vorhanden)")
-            mandant.protokollieren("Keine aktuelle Sicherung vorhanden - lege vor dem Update eine an.")
-            try:
-                backup(mandant, _pruefen=False)
-            except BereitstellungsFehler as e:
-                mandant.protokollieren(f"Update abgebrochen: Sicherung fehlgeschlagen ({e})")
-                raise BereitstellungsFehler(f"Sicherung vor dem Update fehlgeschlagen: {e}")
-        update_ausrollen(mandant, _pruefen=False)
+        if ausgang == "gestoppt":
+            basis.fortschritt(mandant, 40, "Update: Image neu bauen (Instanz bleibt gestoppt)")
+            provisioning.stack_bauen(mandant)
+            mandant.feuerix_version = provisioning.feuerix_version()
+            mandant.save(update_fields=["feuerix_version"])
+            mandant.protokollieren(f"Update auf Feuerix {mandant.feuerix_version or '?'} vorbereitet "
+                                   "(Image gebaut, Instanz bleibt gestoppt).")
+        else:
+            basis.fortschritt(mandant, 5, "Update: Sicherung prüfen")
+            if not mandant.sicherung_aktuell:
+                basis.fortschritt(mandant, 10, "Update: Sicherung anlegen (keine aktuelle vorhanden)")
+                mandant.protokollieren("Keine aktuelle Sicherung vorhanden - lege vor dem Update eine an.")
+                try:
+                    backup(mandant, _pruefen=False)
+                except BereitstellungsFehler as e:
+                    mandant.protokollieren(f"Update abgebrochen: Sicherung fehlgeschlagen ({e})")
+                    raise BereitstellungsFehler(f"Sicherung vor dem Update fehlgeschlagen: {e}")
+            update_ausrollen(mandant, _pruefen=False)
     except BereitstellungsFehler:
-        # Ab Fortschritt 75 lief der Neustart schon und die Instanz antwortet moeglicherweise nicht mehr; davor
-        # laeuft noch der alte Container weiter.
-        spaet = mandant.fortschritt >= 75
-        mandant.status = "fehlgeschlagen" if spaet else "laeuft"
+        # Laufende Instanz: ab Fortschritt 75 lief der Neustart schon und sie antwortet moeglicherweise nicht mehr;
+        # davor laeuft noch der alte Container weiter. Gestoppte Instanz: bleibt gestoppt.
+        spaet = ausgang == "laeuft" and mandant.fortschritt >= 75
+        mandant.status = "fehlgeschlagen" if spaet else ausgang
         mandant.schritt = f"Update fehlgeschlagen bei: {mandant.schritt}"[:200]
         mandant.save(update_fields=["status", "schritt"])
         if spaet:
             provisioning.proxy_nachziehen_best_effort(mandant)
         raise
-    mandant.status = "laeuft"
-    mandant.save(update_fields=["status"])
+    mandant.status = ausgang
+    if ausgang == "gestoppt":
+        mandant.fortschritt, mandant.schritt = 0, ""
+        mandant.save(update_fields=["status", "fortschritt", "schritt"])
+    else:
+        mandant.save(update_fields=["status"])
 
 
 def alle_aktualisieren(pause_sekunden=10, git_pull=False):

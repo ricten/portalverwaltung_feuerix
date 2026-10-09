@@ -15,6 +15,7 @@ class BereitstellungsFehler(Exception):
 # Marker fuer eine in der Weboberflaeche vorgemerkte Aktualisierung (Status "wird_bereitgestellt" + dieser Schritt),
 # damit der Fortschrittsbalken sofort erscheint und das Update sie trotz geaendertem Status annimmt.
 WARTESCHLANGE_UPDATE = "Update: in der Warteschlange"
+WARTESCHLANGE_UPDATE_GESTOPPT = WARTESCHLANGE_UPDATE + " (gestoppte Instanz)"
 
 
 def zufallswert(laenge=50):

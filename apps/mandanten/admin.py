@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from . import betrieb, provisioning, tasks, updates
-from .basis import WARTESCHLANGE_UPDATE, BereitstellungsFehler
+from .basis import WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
 from .models import MandantInstanz, UpdateZustand
 
 
@@ -80,7 +80,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     def _update_vormerken(self, m):
         """Sofort sichtbar machen (Balken), bevor der Worker anfaengt."""
-        m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, WARTESCHLANGE_UPDATE
+        marker = WARTESCHLANGE_UPDATE_GESTOPPT if m.status == "gestoppt" else WARTESCHLANGE_UPDATE
+        m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, marker
         m.save(update_fields=["status", "fortschritt", "schritt"])
 
     def _zurueck(self, request):
@@ -127,8 +128,9 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             raise PermissionDenied
         if aktion == "aktualisieren":
             m = MandantInstanz.objects.filter(pk=pk).first()
-            if m is None or m.status != "laeuft":
-                self.message_user(request, "Update nur für laufende Instanzen möglich.", messages.WARNING)
+            if m is None or m.status not in ("laeuft", "gestoppt"):
+                self.message_user(request, "Update nur für laufende oder gestoppte Instanzen möglich.",
+                                  messages.WARNING)
             else:
                 self._update_vormerken(m)
                 tasks.mandant_update_task.delay(m.pk)
@@ -144,11 +146,15 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         """Bereitgestellte Version; bei verfuegbarem Update zusaetzlich ein Knopf zum Aktualisieren dieser Instanz."""
         text = obj.feuerix_version or "-"
         ziel = UpdateZustand.holen().ziel_version
-        if obj.status != "laeuft" or not ziel or obj.feuerix_version == ziel:
+        if obj.status not in ("laeuft", "gestoppt") or not ziel or obj.feuerix_version == ziel:
             return text
         frage = f"{obj.kuerzel} auf Feuerix {ziel} aktualisieren? Die Instanz ist dabei kurz nicht erreichbar."
-        frage += (" Die letzte Sicherung ist aktuell." if obj.sicherung_aktuell
-                  else " Es gibt keine aktuelle Sicherung - sie wird vorher automatisch angelegt.")
+        if obj.status == "gestoppt":
+            frage = (f"{obj.kuerzel} ist gestoppt. Auf Feuerix {ziel} aktualisieren? Es wird nur das Image gebaut, "
+                     "die Instanz bleibt gestoppt und wird beim nächsten Start aktualisiert.")
+        else:
+            frage += (" Die letzte Sicherung ist aktuell." if obj.sicherung_aktuell
+                      else " Es gibt keine aktuelle Sicherung - sie wird vorher automatisch angelegt.")
         return format_html(
             '<span>{}</span> <button type="button" class="pv-knopf pv-update-einzeln" data-url="{}" '
             'data-frage="{}" title="Auf {} aktualisieren" aria-label="Aktualisieren">'
@@ -294,8 +300,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     def aktualisieren(self, request, queryset):
         gestartet = []
         for m in queryset:
-            if m.status != "laeuft":
-                self.message_user(request, f"{m.kuerzel}: Update nur für laufende Instanzen möglich "
+            if m.status not in ("laeuft", "gestoppt"):
+                self.message_user(request, f"{m.kuerzel}: Update nur für laufende oder gestoppte Instanzen möglich "
                                            f"(Status: {m.get_status_display()}).", messages.WARNING)
                 continue
             self._update_vormerken(m)
