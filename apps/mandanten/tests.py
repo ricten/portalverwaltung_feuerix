@@ -182,3 +182,16 @@ class ManagementCommandTests(TestCase):
                            return_value=_fake_urlopen_context()):
                     call_command("mandant_bereitstellen", "cmd-test", stdout=out)
                 self.assertIn("läuft auf Port", out.getvalue())
+
+
+class DockerUmgebungTests(TestCase):
+    def test_portal_variablen_werden_nicht_an_docker_durchgereicht(self):
+        from unittest import mock
+        from . import basis
+        with mock.patch.dict("os.environ", {"POSTGRES_USER": "portal", "POSTGRES_PASSWORD": "geheim",
+                                             "PATH_TEST_BEHALTEN": "ja"}):
+            umgebung = basis.docker_umgebung({"EXTRA": "1"})
+        self.assertNotIn("POSTGRES_USER", umgebung)
+        self.assertNotIn("POSTGRES_PASSWORD", umgebung)
+        self.assertEqual(umgebung["PATH_TEST_BEHALTEN"], "ja")
+        self.assertEqual(umgebung["EXTRA"], "1")

@@ -4,6 +4,12 @@ Alle nennenswerten Ã„nderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die EintrÃ¤ge bis 0.6.0 wurden nachtrÃ¤glich aus der Git-Historie
 zusammengestellt.
 
+## 0.7.1 (2026-10-09)
+- Fix: Die Datenbank-Zugangsdaten der Portalverwaltung (`POSTGRES_USER`/`-PASSWORD`/`-DB` aus deren `.env`) wurden
+  über die Prozessumgebung an `docker compose` durchgereicht und überschrieben dort die der Mandanten-Instanz. Folge:
+  Der Feuerix-Web-Container kam nicht hoch („password authentication failed for user mandant_…“), die
+  Bereitstellung endete bei 35 % mit „Fehlgeschlagen“. Docker-Aufrufe bekommen jetzt eine bereinigte Umgebung.
+
 ## 0.7.0 (2026-10-09)
 - Installer: Fehlt der Feuerix-Checkout, bietet `install.sh` an, ihn automatisch zu klonen (Standardpfad jetzt
   `../Feuerix`), statt mit einer `docker-compose.yml`-Fehlermeldung abzubrechen.
