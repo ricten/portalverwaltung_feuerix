@@ -100,6 +100,6 @@ def pruefen(zustand):
         benachrichtigung.senden(
             "update", f"{hinweis['name']} {hinweis['neu']} verfügbar",
             f"Es gibt eine neue Version von {hinweis['name']}: {hinweis['neu']}.\n\nInstanzen mit älterer Version: "
-            f"{liste}.\n\nDas Portal aktualisiert diesen Dienst nicht automatisch.")
+            f"{liste}.\n\nAktualisiert wird nicht automatisch: Das Update starten Sie je Instanz im Admin mit dem Pfeil-Knopf in der Spalte „Version“.")
         setattr(zustand, mailfeld, hinweis["neu"])
     return zustand

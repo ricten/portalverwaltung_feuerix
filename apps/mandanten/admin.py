@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from . import backupziel, benachrichtigung, betrieb, gesamtlog, provisioning, tasks, updates
-from .basis import WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
+from .basis import WARTESCHLANGE_DIENST, WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
 from .models import BackupZiel, Benachrichtigung, LogEintrag, MandantInstanz, UpdateZustand
 
 
@@ -84,6 +84,28 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         benutzer = request.user.get_username()
         m.protokollieren(f"{text} (Benutzer: {benutzer})", benutzer=benutzer)
 
+    def _dienst_update(self, request, pk, dienst):
+        """Update von Paperless/OpenSlides einer Instanz (nur auf Klick)."""
+        from .dienstversionen import NAMEN
+        m = MandantInstanz.objects.filter(pk=pk).first()
+        zustand = UpdateZustand.holen()
+        liste = HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
+        if m is None or m.status != "laeuft":
+            self.message_user(request, "Dienst-Update nur für laufende Instanzen möglich.", messages.WARNING)
+        elif zustand.rollout_laeuft:
+            self.message_user(request, "Während eines Rollouts ist kein Dienst-Update möglich.", messages.WARNING)
+        elif not getattr(zustand, f"{dienst}_neueste"):
+            self.message_user(request, "Die neueste Version ist unbekannt - bitte zuerst „Erneut prüfen“.",
+                              messages.WARNING)
+        else:
+            m.status, m.fortschritt, m.schritt = "wird_bereitgestellt", 0, WARTESCHLANGE_DIENST
+            m.save(update_fields=["status", "fortschritt", "schritt"])
+            self._log(request, m, f"Update von {NAMEN[dienst]} gestartet")
+            tasks.dienst_update_task.delay(m.pk, dienst)
+            self.message_user(request, f"Update von {NAMEN[dienst]} für {m.kuerzel} gestartet - Fortschritt siehe "
+                                       "Spalte „Fortschritt“.", messages.INFO)
+        return liste
+
     def _update_vormerken(self, m):
         """Sofort sichtbar machen (Balken), bevor der Worker anfaengt."""
         marker = WARTESCHLANGE_UPDATE_GESTOPPT if m.status == "gestoppt" else WARTESCHLANGE_UPDATE
@@ -137,8 +159,12 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         """Ziel der Schaltflaechen in der Instanzliste (nur POST, braucht Aenderungsrecht)."""
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
-        if not self.has_change_permission(request) or (aktion not in self.DIENSTE and aktion != "aktualisieren"):
+        dienst_update = {"paperless_update": "paperless", "openslides_update": "openslides"}
+        if not self.has_change_permission(request) or (
+                aktion not in self.DIENSTE and aktion != "aktualisieren" and aktion not in dienst_update):
             raise PermissionDenied
+        if aktion in dienst_update:
+            return self._dienst_update(request, pk, dienst_update[aktion])
         if aktion == "aktualisieren":
             m = MandantInstanz.objects.filter(pk=pk).first()
             if m is None or m.status not in ("laeuft", "gestoppt"):
@@ -164,8 +190,25 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             if not v:
                 continue
             alt = bool(versionstupel(v) and versionstupel(neu) and versionstupel(v) < versionstupel(neu))
-            zeilen.append(format_html('<small{}>{} {}{}</small>', mark_safe(' style="color:#ef6c00"') if alt else "",
-                                      name, v, f" → {neu} verfügbar" if alt else ""))
+            knopf = ""
+            if alt and obj.status == "laeuft" and not zustand.rollout_laeuft:
+                if dienst == "paperless":
+                    frage = (f"Paperless-ngx von {v} auf {neu} aktualisieren? Vorher wird ein Export der Dokumente "
+                             "angelegt (Ordner export der Instanz); schlägt er fehl, wird nichts geändert. Paperless "
+                             "ist kurz nicht erreichbar, Feuerix läuft weiter. Bei Paperless entscheidet der Hersteller, "
+                             "welche Datenbank-Migrationen mit der neuen Version laufen.")
+                else:
+                    frage = (f"OpenSlides von {v} auf {neu} aktualisieren? Vorher wird ein Datenbank-Dump gesichert; "
+                             "schlägt er fehl, wird nichts geändert. Das Portal ändert nur die Versionsnummer und "
+                             "startet neu - falls die Release-Hinweise von OpenSlides zusätzliche Migrationsschritte "
+                             "verlangen, müssen diese danach von Hand erfolgen. OpenSlides ist kurz nicht erreichbar.")
+                knopf = format_html(
+                    ' <button type="button" class="pv-knopf pv-update-einzeln" data-url="{}" data-frage="{}" '
+                    'title="{} auf {} aktualisieren" aria-label="{} aktualisieren"><svg viewBox="0 0 24 24" width="14" '
+                    'height="14" aria-hidden="true"><path fill="currentColor" d="M12 3l-8 8h5v9h6v-9h5z"/></svg></button>',
+                    reverse("admin:mandanten_dienst", args=[obj.pk, f"{dienst}_update"]), frage, name, neu, name)
+            zeilen.append(format_html('<small{}>{} {}{}</small>{}', mark_safe(' style="color:#ef6c00"') if alt else "",
+                                      name, v, f" → {neu} verfügbar" if alt else "", knopf))
         if not zeilen:
             return text
         return format_html("{}<br>{}", text, mark_safe("<br>".join(str(z) for z in zeilen)))

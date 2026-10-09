@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.23.0 (2026-10-10)
+- Neu: **Update von Paperless-ngx und OpenSlides aus dem Portal** (nur auf Klick, nie automatisch): In der Spalte „Version“
+  erscheint bei veralteter Version ein Pfeil-Knopf. Paperless: Export der Dokumente (`document_exporter`) → `pull` → `up -d`
+  → warten. OpenSlides: Datenbank-Dump → Version in `config.yml`/`docker-compose.yml` ändern → `pull` → `up` → warten.
+  Schlägt die Sicherung fehl, wird nichts geändert; bei einem Fehler vor dem Neustart werden die OpenSlides-Dateien
+  zurückgesetzt. Feuerix läuft währenddessen weiter. Kein Hauptversionswechsel bei OpenSlides (das bitte von Hand).
+  Fortschritt in der Spalte „Fortschritt“, Ergebnis in Protokoll und Gesamtlog, bei Fehlschlag auf Wunsch per Mail.
+
 ## 0.22.0 (2026-10-10)
 - Neu: **Versionen von Paperless-ngx und OpenSlides** werden je Instanz erfasst (Paperless aus dem `X-Version`-Header der
   laufenden Instanz, OpenSlides aus dem `tag:` der erzeugten `config.yml`) und in der Spalte „Version“ sowie auf der

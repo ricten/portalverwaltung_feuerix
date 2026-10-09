@@ -42,6 +42,12 @@ def mandant_neustarten_task(mandant_id):
 
 
 @shared_task
+def dienst_update_task(mandant_id, dienst):
+    from . import dienstupdate
+    _ausfuehren(lambda m: dienstupdate.dienst_aktualisieren(m, dienst), mandant_id, protokollieren=False)
+
+
+@shared_task
 def mandant_backup_task(mandant_id):
     _ausfuehren(betrieb.backup, mandant_id, protokollieren=True)
 

@@ -57,7 +57,9 @@ Aktuell automatisiert:
     sowie Suche; Aufbewahrung `LOG_AUFBEWAHRUNG_TAGE` (Standard 90 Tage).
   - **Versionen von Paperless-ngx und OpenSlides**: Die laufenden Versionen stehen in der Spalte „Version“. Die
     Update-Prüfung schaut auf GitHub nach neuen Releases und meldet sie (Hinweis im Admin, Gesamtlog, Mail), aktualisiert
-    aber nichts automatisch. Abschalten: `UPDATE_DIENSTE_PRUEFEN=0`.
+    aber nichts automatisch. Das Update startest du je Instanz mit dem Pfeil-Knopf in der Spalte „Version“: Paperless
+    macht vorher einen Export (`document_exporter`), OpenSlides einen Datenbank-Dump; schlägt das fehl, wird nichts
+    geändert. Kein Hauptversionswechsel bei OpenSlides (von Hand). Abschalten der Prüfung: `UPDATE_DIENSTE_PRUEFEN=0`.
   - **Online-Check**: `python manage.py mandant_online_check` (vom Installer als systemd-Timer `portal-check.timer`, alle
     5 Minuten) prüft Instanzen und Backup-Ziel, speichert „offline seit“, protokolliert Wechsel und zeigt Ausfälle als roten
     Hinweis im Admin.

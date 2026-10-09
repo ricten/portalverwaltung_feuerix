@@ -51,6 +51,6 @@
     {% for kuerzel, version in h.instanzen %}<span class="pv-chip">{{ kuerzel }} <small>({{ version }})</small></span>{% endfor %}
   </div>
   {% endfor %}
-  <div class="pv-update-ergebnis">Nur ein Hinweis - {% if hinweise|length > 1 %}diese Dienste werden{% else %}dieser Dienst wird{% endif %} nicht automatisch aktualisiert.</div>
+  <div class="pv-update-ergebnis">Aktualisiert wird nicht automatisch: Starten Sie das Update je Instanz mit dem Pfeil-Knopf in der Spalte „Version“ (vorher wird eine Sicherung angelegt).</div>
 </div>
 {% endif %}{% endwith %}{% endif %}

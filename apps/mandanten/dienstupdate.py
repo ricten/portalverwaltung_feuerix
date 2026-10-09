@@ -1,0 +1,143 @@
+"""Update von Paperless-ngx und OpenSlides einer Instanz - nur auf ausdruecklichen Klick, nie automatisch.
+
+Sicherheitsnetz: Vor jeder Aenderung wird eine Sicherung des Dienstes angelegt (Paperless: Export mit `document_exporter`
+in `<instanz>/paperless/export`, OpenSlides: Datenbank-Dump in `<instanz>/openslides/backups`). Schlaegt sie fehl, wird
+NICHTS veraendert. Beim Update laeuft die Instanz selbst (Feuerix) unveraendert weiter."""
+import re
+from datetime import datetime
+from pathlib import Path
+
+from django.conf import settings
+
+from . import basis, benachrichtigung, dienstversionen, openslides, paperless
+from .basis import WARTESCHLANGE_DIENST, BereitstellungsFehler
+from .dienstversionen import NAMEN
+from .models import UpdateZustand
+from .updates import versionstupel
+
+
+def _schritt(mandant, prozent, text):
+    basis.fortschritt(mandant, prozent, text)
+
+
+def paperless_aktualisieren(mandant):
+    befehl, cwd = paperless._compose_basis(mandant)
+    _schritt(mandant, 20, "Paperless: Export anlegen (Sicherung)")
+    basis.docker(befehl + ["exec", "-T", "webserver", "document_exporter", "../export"],
+                 "Paperless: Export vor dem Update", timeout=7200, cwd=cwd)
+    mandant.protokollieren(f"Paperless-Export angelegt in {paperless._verzeichnis(mandant) / 'export'}.")
+    _schritt(mandant, 45, "Paperless: neues Image laden")
+    basis.docker(befehl + ["pull"], "Paperless: docker compose pull", timeout=1800, cwd=cwd)
+    _schritt(mandant, 70, "Paperless: neu starten")
+    basis.docker(befehl + ["up", "-d"], "Paperless: docker compose up", timeout=600, cwd=cwd)
+    _schritt(mandant, 85, "Paperless: warten, bis es antwortet")
+    paperless.auf_bereitschaft_warten(mandant)
+    neu = dienstversionen.paperless_laufend(mandant)
+    if neu:
+        mandant.paperless_version = neu
+        mandant.save(update_fields=["paperless_version"])
+    return neu
+
+
+def _tag_ersetzen(text, alt, neu):
+    """Ersetzt den Image-Tag `alt` durch `neu` in den OpenSlides-Image-Zeilen. -> (neuer Text, Anzahl)"""
+    muster = re.compile(rf"(?m)^(\s*image:\s*\S*openslides\S*:){re.escape(alt)}(\s*)$")
+    return muster.subn(rf"\g<1>{neu}\g<2>", text)
+
+
+def openslides_aktualisieren(mandant, neu):
+    verz = openslides._verzeichnis(mandant)
+    compose, config = verz / "docker-compose.yml", verz / "config.yml"
+    alt = dienstversionen.openslides_konfiguriert(mandant)
+    if not compose.exists() or not config.exists() or not alt:
+        raise BereitstellungsFehler("OpenSlides: Stack-Konfiguration der Instanz nicht gefunden.")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", neu) or versionstupel(neu) <= versionstupel(alt):
+        raise BereitstellungsFehler(f"OpenSlides: Version {neu} ist keine Aktualisierung von {alt}.")
+    if versionstupel(neu)[0] != versionstupel(alt)[0]:
+        raise BereitstellungsFehler(f"OpenSlides: Wechsel der Hauptversion ({alt} → {neu}) bitte von Hand durchführen.")
+    umgebung = openslides._env(mandant)
+    compose_befehl = ["docker", "compose"]
+
+    _schritt(mandant, 15, "OpenSlides: Datenbank sichern")
+    dump = basis.docker(compose_befehl + ["exec", "-T", "postgres", "pg_dump", "-U", "openslides", "-d", "openslides"],
+                        "OpenSlides: Datenbank-Dump vor dem Update", timeout=3600, cwd=verz, env=umgebung)
+    if not dump.strip():
+        raise BereitstellungsFehler("OpenSlides: Datenbank-Dump ist leer - Update abgebrochen.")
+    ziel = verz / "backups"
+    ziel.mkdir(exist_ok=True)
+    datei = ziel / f"openslides-{alt}-{datetime.now():%Y%m%d-%H%M%S}.sql"
+    datei.write_text(dump, encoding="utf-8")
+    mandant.protokollieren(f"OpenSlides-Datenbank gesichert in {datei}.")
+
+    _schritt(mandant, 35, f"OpenSlides: Version {alt} → {neu} eintragen")
+    original_compose, original_config = compose.read_text(encoding="utf-8"), config.read_text(encoding="utf-8")
+    neues_compose, anzahl = _tag_ersetzen(original_compose, alt, neu)
+    if not anzahl:
+        raise BereitstellungsFehler(f"OpenSlides: Tag {alt} in docker-compose.yml nicht gefunden - nichts geändert.")
+    neue_config = re.sub(rf"""(?m)^(\s*tag:\s*['"]?){re.escape(alt)}""", rf"\g<1>{neu}", original_config)
+    compose.write_text(neues_compose, encoding="utf-8")
+    config.write_text(neue_config, encoding="utf-8")
+    try:
+        _schritt(mandant, 50, "OpenSlides: neue Images laden")
+        basis.docker(compose_befehl + ["pull"], "OpenSlides: docker compose pull", timeout=1800, cwd=verz,
+                     env=umgebung)
+        _schritt(mandant, 70, "OpenSlides: neu starten")
+        basis.docker(compose_befehl + ["up", "--detach"], "OpenSlides: docker compose up", timeout=600, cwd=verz,
+                     env=umgebung)
+    except BereitstellungsFehler:
+        compose.write_text(original_compose, encoding="utf-8")      # nichts Halbes zuruecklassen
+        config.write_text(original_config, encoding="utf-8")
+        raise
+    _schritt(mandant, 85, "OpenSlides: warten, bis es antwortet")
+    openslides.auf_bereitschaft_warten(mandant)
+    mandant.openslides_version = neu
+    mandant.save(update_fields=["openslides_version"])
+    return neu
+
+
+def _ausgang_ok(mandant):
+    return mandant.status == "laeuft" or (
+        mandant.status == "wird_bereitgestellt" and mandant.schritt == WARTESCHLANGE_DIENST)
+
+
+def dienst_aktualisieren(mandant, dienst):
+    """Aktualisiert Paperless-ngx (`dienst="paperless"`) oder OpenSlides (`"openslides"`) auf die zuletzt geprueft
+    gefundene neueste Version. Die Instanz steht dabei auf "In Arbeit" und danach wieder auf "Laeuft"."""
+    if dienst not in NAMEN:
+        raise BereitstellungsFehler(f"Unbekannter Dienst: {dienst}")
+    name = NAMEN[dienst]
+    if not _ausgang_ok(mandant):
+        raise BereitstellungsFehler(f"Update von {name} nur für laufende Instanzen möglich (Status: {mandant.status}).")
+    if not getattr(mandant, f"{dienst}_domain"):
+        raise BereitstellungsFehler(f"{name} ist bei dieser Instanz nicht eingerichtet.")
+    zustand = UpdateZustand.holen()
+    if zustand.rollout_laeuft:
+        raise BereitstellungsFehler("Während eines Rollouts ist kein Dienst-Update möglich.")
+    neu = getattr(zustand, f"{dienst}_neueste")
+    if not neu:
+        raise BereitstellungsFehler(f"Neueste Version von {name} ist unbekannt - bitte zuerst die Update-Prüfung ausführen.")
+    mandant.status = "wird_bereitgestellt"
+    mandant.save(update_fields=["status"])
+    alt = getattr(mandant, f"{dienst}_version") or "?"
+    mandant.protokollieren(f"Update von {name} gestartet ({alt} → {neu}).")
+    try:
+        if dienst == "paperless":
+            erreicht = paperless_aktualisieren(mandant)
+        else:
+            erreicht = openslides_aktualisieren(mandant, neu)
+    except BereitstellungsFehler as e:
+        # Feuerix selbst ist nicht betroffen: die Instanz laeuft weiter, der Fehler steht im Balken und im Protokoll
+        mandant.status = "laeuft"
+        mandant.schritt = f"Update von {name} fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.save(update_fields=["status", "schritt"])
+        mandant.protokollieren(f"Update von {name} fehlgeschlagen: {e}")
+        benachrichtigung.senden(
+            "update", f"Update von {name} bei {mandant.kuerzel} fehlgeschlagen",
+            f"Das Update von {name} der Instanz {mandant.verein_name} ({mandant.kuerzel}) ist fehlgeschlagen:\n\n"
+            f"{str(e)[:1500]}\n\nDie Instanz selbst läuft weiter; die Sicherung vor dem Update bleibt erhalten.")
+        raise
+    mandant.status = "laeuft"
+    mandant.save(update_fields=["status"])
+    basis.fortschritt(mandant, 100, "Fertig")
+    mandant.protokollieren(f"Update von {name} abgeschlossen (jetzt {erreicht or neu}).")
+    return erreicht
