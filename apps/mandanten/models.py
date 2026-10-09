@@ -82,6 +82,7 @@ class MandantInstanz(models.Model):
     online = models.BooleanField("Erreichbar (letzter Check)", null=True, blank=True, editable=False)
     online_geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True, editable=False)
     offline_seit = models.DateTimeField("Offline seit", null=True, blank=True, editable=False)
+    offline_mail_gesendet = models.BooleanField(default=False, editable=False)
 
     erstellt_am = models.DateTimeField("Erstellt am", auto_now_add=True)
     aktualisiert_am = models.DateTimeField("Zuletzt geändert", auto_now=True)
@@ -142,6 +143,8 @@ class UpdateZustand(models.Model):
     rollout_text = models.CharField("Rollout-Schritt", max_length=200, blank=True)
     rollout_ergebnis = models.TextField("Ergebnis des letzten Rollouts", blank=True)
     rollout_beendet_am = models.DateTimeField(null=True, blank=True)
+    update_mail_version = models.CharField("Version, zu der zuletzt eine Mail ging", max_length=20, blank=True,
+                                           editable=False)
 
     class Meta:
         verbose_name = "Update-Zustand"
@@ -205,6 +208,8 @@ class BackupZiel(models.Model):
     online = models.BooleanField("Erreichbar (letzter Check)", null=True, blank=True, editable=False)
     online_geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True, editable=False)
     online_fehler = models.CharField("Fehler des letzten Checks", max_length=500, blank=True, editable=False)
+    offline_seit = models.DateTimeField(null=True, blank=True, editable=False)
+    offline_mail_gesendet = models.BooleanField(default=False, editable=False)
 
     class Meta:
         verbose_name = "Backup-Ziel"
@@ -232,5 +237,63 @@ class BackupZiel(models.Model):
             for feld, text in (("server", "Server"), ("freigabe", "Freigabe"), ("benutzer", "Benutzer")):
                 if not getattr(self, feld).strip():
                     fehler.setdefault(feld, f"{text} ist nötig, wenn das Ziel aktiv ist.")
+        if fehler:
+            raise ValidationError(fehler)
+
+
+class Benachrichtigung(models.Model):
+    """Einzeilige Einstellung (pk=1): E-Mail-Benachrichtigung ueber Ausfaelle, Sicherungsfehler und Updates."""
+    SICHERHEIT = [("starttls", "STARTTLS (Port 587)"), ("ssl", "SSL/TLS (Port 465)"), ("keine", "Keine (nur im LAN!)")]
+
+    aktiv = models.BooleanField("E-Mail-Benachrichtigung aktiv", default=False)
+    empfaenger = models.TextField("Empfänger", blank=True,
+                                  help_text="Eine oder mehrere E-Mail-Adressen, getrennt durch Komma oder Zeilenumbruch.")
+    absender = models.EmailField("Absender", blank=True, help_text="z. B. portal@verein.de")
+    smtp_host = models.CharField("SMTP-Server", max_length=200, blank=True)
+    smtp_port = models.PositiveIntegerField("Port", default=587)
+    smtp_sicherheit = models.CharField("Verschlüsselung", max_length=10, choices=SICHERHEIT, default="starttls")
+    smtp_benutzer = models.CharField("Benutzer", max_length=200, blank=True)
+    smtp_passwort = VerschluesseltesTextField("Passwort", blank=True, editable=False)
+
+    bei_ausfall = models.BooleanField("Bei Ausfall und Wiederkehr von Instanzen und Backup-Ziel", default=True)
+    ausfall_minuten = models.PositiveIntegerField(
+        "Ausfall erst melden nach (Minuten)", default=10,
+        help_text="Verhindert Fehlalarme bei kurzen Neustarts; die Mail kommt, wenn etwas so lange durchgehend offline ist.")
+    bei_backup_fehler = models.BooleanField("Bei fehlgeschlagener Sicherung (auch Upload auf die Freigabe)", default=True)
+    bei_update = models.BooleanField("Wenn eine neue Feuerix-Version verfügbar ist", default=True)
+
+    letzter_fehler = models.CharField("Letzter Versandfehler", max_length=500, blank=True, editable=False)
+    letzte_mail_am = models.DateTimeField("Letzte Mail gesendet", null=True, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "Benachrichtigung"
+        verbose_name_plural = "Benachrichtigungen"
+
+    def __str__(self):
+        return "E-Mail-Benachrichtigung"
+
+    @classmethod
+    def holen(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def empfaenger_liste(self):
+        return [a.strip() for a in re.split(r"[,;\s]+", self.empfaenger) if a.strip()]
+
+    def clean(self):
+        from django.core.validators import validate_email
+        fehler = {}
+        for adresse in self.empfaenger_liste():
+            try:
+                validate_email(adresse)
+            except ValidationError:
+                fehler["empfaenger"] = f"„{adresse}“ ist keine gültige E-Mail-Adresse."
+                break
+        if self.aktiv:
+            if not self.smtp_host.strip():
+                fehler["smtp_host"] = "SMTP-Server ist nötig, wenn die Benachrichtigung aktiv ist."
+            if not self.absender:
+                fehler["absender"] = "Absender ist nötig, wenn die Benachrichtigung aktiv ist."
+            if not self.empfaenger_liste():
+                fehler.setdefault("empfaenger", "Mindestens ein Empfänger ist nötig.")
         if fehler:
             raise ValidationError(fehler)

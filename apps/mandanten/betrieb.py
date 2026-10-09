@@ -7,7 +7,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-from . import backupziel, basis, openslides, paperless, provisioning
+from . import backupziel, basis, benachrichtigung, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
@@ -26,12 +26,23 @@ def _ausgangsstatus(mandant):
 
 
 def backup(mandant, _pruefen=True):
+    """Sichert die Instanz (siehe _backup). Bei einem Fehler geht - falls eingerichtet - eine Mail raus."""
+    if _pruefen and mandant.status != "laeuft":
+        raise BereitstellungsFehler(f"Sicherung nur fuer laufende Instanzen moeglich (Status: {mandant.status}).")
+    try:
+        return _backup(mandant)
+    except BereitstellungsFehler as e:
+        benachrichtigung.senden(
+            "backup", f"Sicherung von {mandant.kuerzel} fehlgeschlagen",
+            f"Die Sicherung der Instanz {mandant.verein_name} ({mandant.kuerzel}) ist fehlgeschlagen:\n\n{str(e)[:1500]}")
+        raise
+
+
+def _backup(mandant):
     """Sichert Datenbank und Medien ueber Feuerix' scripts/backup.sh und kopiert die Sicherungen aus dem
     Container nach `<instanz>/backups` (eine Sicherung im selben Volume waere bei Datenverlust mit weg).
     Der FIELD_ENCRYPTION_KEY liegt verschluesselt in der Portalverwaltungs-Datenbank - deren Sicherung (samt
     FIELD_ENCRYPTION_KEY der Portalverwaltung) bleibt Sache des Betreibers."""
-    if _pruefen and mandant.status != "laeuft":
-        raise BereitstellungsFehler(f"Sicherung nur fuer laufende Instanzen moeglich (Status: {mandant.status}).")
     compose = provisioning._compose_basis(mandant)
     basis.docker(compose + ["exec", "-T", "web", "sh", "/app/scripts/backup.sh"], "Sicherung", timeout=3600)
     ziel = basis.instanz_verzeichnis(mandant, "backups")

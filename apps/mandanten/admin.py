@@ -6,9 +6,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import backupziel, betrieb, provisioning, tasks, updates
+from . import backupziel, benachrichtigung, betrieb, provisioning, tasks, updates
 from .basis import WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
-from .models import BackupZiel, MandantInstanz, UpdateZustand
+from .models import BackupZiel, Benachrichtigung, MandantInstanz, UpdateZustand
 
 
 class MandantForm(forms.ModelForm):
@@ -384,5 +384,57 @@ class BackupZielAdmin(admin.ModelAdmin):
                 self.message_user(request, backupziel.testen(obj), messages.SUCCESS)
             except BereitstellungsFehler as e:
                 self.message_user(request, f"Test fehlgeschlagen - {e}", messages.ERROR)
+            return HttpResponseRedirect(request.path)
+        return super().response_change(request, obj)
+
+
+class BenachrichtigungForm(forms.ModelForm):
+    smtp_passwort_neu = forms.CharField(
+        label="Passwort", required=False, widget=forms.PasswordInput(render_value=False),
+        help_text="Leer lassen, um das gespeicherte Passwort zu behalten. Es wird verschlüsselt gespeichert.")
+
+    class Meta:
+        model = Benachrichtigung
+        fields = ["aktiv", "empfaenger", "absender", "smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer",
+                  "bei_ausfall", "ausfall_minuten", "bei_backup_fehler", "bei_update"]
+
+
+@admin.register(Benachrichtigung)
+class BenachrichtigungAdmin(admin.ModelAdmin):
+    """Eine einzige Einstellung: die Liste fuehrt direkt zum Formular."""
+    form = BenachrichtigungForm
+    fieldsets = [
+        (None, {"fields": ["aktiv", "empfaenger", "absender"]}),
+        ("SMTP-Server", {"fields": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer",
+                                    "smtp_passwort_neu"]}),
+        ("Wann benachrichtigen?", {"fields": ["bei_ausfall", "ausfall_minuten", "bei_backup_fehler", "bei_update"]}),
+        ("Status", {"fields": ["letzte_mail_am", "letzter_fehler"]}),
+    ]
+    readonly_fields = ["letzte_mail_am", "letzter_fehler"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        return HttpResponseRedirect(reverse("admin:mandanten_benachrichtigung_change", args=[Benachrichtigung.holen().pk]))
+
+    def save_model(self, request, obj, form, change):
+        if form.cleaned_data.get("smtp_passwort_neu"):
+            obj.smtp_passwort = form.cleaned_data["smtp_passwort_neu"]
+        super().save_model(request, obj, form, change)
+
+    def response_change(self, request, obj):
+        if "_testmail" in request.POST:
+            try:
+                if not obj.empfaenger_liste() or not obj.smtp_host or not obj.absender:
+                    raise ValueError("Empfänger, Absender und SMTP-Server müssen ausgefüllt sein.")
+                benachrichtigung.testmail(obj)
+                self.message_user(request, f"Test-Mail an {', '.join(obj.empfaenger_liste())} gesendet.",
+                                  messages.SUCCESS)
+            except Exception as e:
+                self.message_user(request, f"Test-Mail fehlgeschlagen: {type(e).__name__}: {e}", messages.ERROR)
             return HttpResponseRedirect(request.path)
         return super().response_change(request, obj)

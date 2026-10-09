@@ -49,6 +49,9 @@ Aktuell automatisiert:
   - **Backup-Ziel** (Admin › Backup-Ziel): Sicherungen zusätzlich auf eine SMB-/Windows-/NAS-Freigabe hochladen
     (Server, Freigabe, Unterordner, Benutzer, Passwort verschlüsselt; Aufbewahrung in Tagen; optional lokale Kopie löschen;
     „Speichern und Verbindung testen“). Mit aktivem Ziel zählt eine Sicherung erst nach erfolgreichem Upload als aktuell.
+  - **E-Mail-Benachrichtigung** (Admin › Benachrichtigungen): SMTP-Daten und Empfänger einstellen, Test-Mail senden. Mails
+    nur bei Ereignissen: Ausfall/Wiederkehr (erst nach einstellbarer Dauer, Standard 10 Min.), fehlgeschlagene Sicherung,
+    neue Feuerix-Version.
   - **Online-Check**: `python manage.py mandant_online_check` (vom Installer als systemd-Timer `portal-check.timer`, alle
     5 Minuten) prüft Instanzen und Backup-Ziel, speichert „offline seit“, protokolliert Wechsel und zeigt Ausfälle als roten
     Hinweis im Admin.

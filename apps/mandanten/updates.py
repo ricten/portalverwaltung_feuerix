@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from . import basis, betrieb, provisioning
+from . import basis, benachrichtigung, betrieb, provisioning
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz, UpdateZustand
 
@@ -64,6 +64,12 @@ def pruefen():
     except BereitstellungsFehler as e:
         zustand.fehler = str(e)[:1000]
     zustand.geprueft_am = timezone.now()
+    if (zustand.update_verfuegbar and not zustand.fehler and zustand.remote_version != zustand.update_mail_version
+            and benachrichtigung.senden(
+                "update", f"Feuerix {zustand.remote_version} verfügbar",
+                f"Es gibt eine neue Feuerix-Version: {zustand.remote_version} (installiert: {zustand.lokale_version}).\n\n"
+                f"{zustand.aenderungen[:1500]}\n\nDas Update starten Sie im Admin mit \"Update jetzt ausrollen\".")):
+        zustand.update_mail_version = zustand.remote_version
     zustand.save()
     return zustand
 

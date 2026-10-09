@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.20.0 (2026-10-10)
+- Neu: **E-Mail-Benachrichtigung** (Admin › Benachrichtigungen: SMTP-Server mit Verschlüsselung, Benutzer, Passwort
+  (verschlüsselt gespeichert), Absender, Empfänger, „Speichern und Test-Mail senden“). Mails gibt es nur bei Ereignissen:
+  Instanz oder Backup-Ziel länger als `Ausfall erst melden nach` Minuten (Standard 10) offline und wieder erreichbar,
+  fehlgeschlagene Sicherung (inkl. Upload auf die Freigabe) und neue Feuerix-Version (einmal je Version). Jedes
+  Ereignis lässt sich einzeln abschalten; ein Versandfehler stört nie den eigentlichen Vorgang und wird angezeigt.
+- Datenbank-Migration 0011.
+
 ## 0.19.0 (2026-10-10)
 - Neu: **Backup-Ziel auf einer Netzwerkfreigabe (SMB/CIFS)** mit Benutzer und Passwort (verschlüsselt gespeichert),
   einstellbar im Admin unter „Backup-Ziel“ (Server, Freigabe, Unterordner, Aufbewahrung, Option „lokale Kopie löschen“,

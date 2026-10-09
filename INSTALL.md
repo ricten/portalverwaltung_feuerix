@@ -118,6 +118,13 @@ anhaken und mit **Speichern und Verbindung testen** prüfen. Unterstützt wird S
 NFS. Das Portal schreibt direkt per SMB (nichts wird gemountet); der Benutzer braucht Schreibrechte auf die Freigabe. Je Instanz
 entsteht ein Ordner mit dem Kürzel. Nach `git pull` einmal `./venv/bin/pip install -r requirements.txt` und `migrate`.
 
+## E-Mail-Benachrichtigung
+
+Im Admin unter **Benachrichtigungen**: SMTP-Server, Port, Verschlüsselung (STARTTLS 587, SSL 465), Benutzer und Passwort, Absender
+und Empfänger eintragen, **aktiv** anhaken und mit **Speichern und Test-Mail senden** prüfen. Mails gehen nur bei Ereignissen
+raus (Ausfall/Wiederkehr nach `Ausfall erst melden nach` Minuten, fehlgeschlagene Sicherung, neue Feuerix-Version). Ohne den
+Online-Check-Timer (siehe oben) gibt es keine Ausfallmeldungen. Wenn die Mail nicht ankommt: unter „Status“ steht der letzte Versandfehler.
+
 ## Fehlerbehebung
 
 | Meldung / Symptom | Ursache und Lösung |
