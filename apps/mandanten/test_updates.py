@@ -402,3 +402,57 @@ class UpdateFortschrittTests(TestCase):
             self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/aktualisieren/")
         m.refresh_from_db()
         self.assertEqual((m.status, m.schritt), ("wird_bereitgestellt", WARTESCHLANGE_UPDATE))
+
+
+class EinzelUpdatePullTests(TestCase):
+    def test_einzelupdate_zieht_zuerst_den_neuen_code(self):
+        from . import tasks
+        m = _m("p1", "1.58.0")
+        gerufen = []
+        version = {"wert": "1.58.0"}
+
+        def git(argumente, was, timeout=90):
+            gerufen.append(argumente[0])
+            if argumente[0] == "pull":
+                version["wert"] = "1.59.0"
+            return _git_antworten()(argumente, was, timeout)
+
+        with patch("apps.mandanten.updates._git", side_effect=git), \
+             patch("apps.mandanten.provisioning.feuerix_version", side_effect=lambda: version["wert"]), \
+             patch("apps.mandanten.betrieb.backup"), \
+             patch("apps.mandanten.betrieb.update_ausrollen") as ausrollen:
+            tasks.mandant_update_task(m.pk)
+        self.assertIn("pull", gerufen)
+        ausrollen.assert_called_once()
+
+    def test_ohne_neue_version_kein_pull(self):
+        from . import tasks
+        m = _m("p2", "1.58.0")
+        gerufen = []
+
+        def git(argumente, was, timeout=90):
+            gerufen.append(argumente[0])
+            return _git_antworten(remote="1.58.0")(argumente, was, timeout)
+
+        with patch("apps.mandanten.updates._git", side_effect=git), \
+             patch("apps.mandanten.provisioning.feuerix_version", return_value="1.58.0"), \
+             patch("apps.mandanten.betrieb.backup"), patch("apps.mandanten.betrieb.update_ausrollen"):
+            tasks.mandant_update_task(m.pk)
+        self.assertNotIn("pull", gerufen)
+
+    def test_pull_fehler_bricht_ab_und_laesst_instanz_laufen(self):
+        from . import tasks
+        m = _m("p3", "1.58.0")
+        with patch("apps.mandanten.updates._git", side_effect=BereitstellungsFehler("offline")), \
+             patch("apps.mandanten.betrieb.update_ausrollen") as ausrollen:
+            tasks.mandant_update_task(m.pk)
+        ausrollen.assert_not_called()
+        m.refresh_from_db()
+        self.assertEqual(m.status, "laeuft")
+        self.assertIn("Prüfung fehlgeschlagen", m.protokoll)
+
+    def test_waehrend_eines_rollouts_kein_eigener_pull(self):
+        UpdateZustand.objects.update_or_create(pk=1, defaults=dict(rollout_laeuft=True))
+        with patch("apps.mandanten.updates._git") as git:
+            updates.checkout_aktualisieren()
+        git.assert_not_called()

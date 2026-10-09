@@ -130,15 +130,19 @@ def neustarten(mandant):
     _hochfahren(mandant, "restart", "neu starten")
 
 
-def update_mit_sicherung(mandant):
+def update_mit_sicherung(mandant, vorher=None):
     """Aktualisiert eine Instanz mit sichtbarem Fortschritt: prueft zuerst, ob eine aktuelle Sicherung existiert
     (UPDATE_BACKUP_MAX_ALTER_STUNDEN), legt bei Bedarf eine an und aktualisiert erst danach. Schlaegt die Sicherung
-    fehl, wird NICHT aktualisiert. Waehrend des Updates steht die Instanz auf "wird_bereitgestellt" (Balken)."""
+    fehl, wird NICHT aktualisiert. Waehrend des Updates steht die Instanz auf "wird_bereitgestellt" (Balken).
+    `vorher` (optional) wird zuerst aufgerufen, z. B. um den Feuerix-Code zu ziehen."""
     if not _update_erlaubt(mandant):
         raise BereitstellungsFehler(f"Update nur fuer laufende Instanzen moeglich (Status: {mandant.status}).")
     mandant.status = "wird_bereitgestellt"
     mandant.save(update_fields=["status"])
     try:
+        if vorher:
+            basis.fortschritt(mandant, 3, "Update: neuen Code holen (git pull)")
+            vorher()
         basis.fortschritt(mandant, 5, "Update: Sicherung prüfen")
         if not mandant.sicherung_aktuell:
             basis.fortschritt(mandant, 10, "Update: Sicherung anlegen (keine aktuelle vorhanden)")

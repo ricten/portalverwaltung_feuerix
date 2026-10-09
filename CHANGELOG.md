@@ -4,6 +4,11 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.15.1 (2026-10-10)
+- Fix: Das Update einer **einzelnen** Instanz (Knopf in der Versionsspalte, Admin-Aktion) zieht jetzt zuerst den neuen
+  Feuerix-Code (`git pull --ff-only`, falls der Remote neuer ist). Bisher wurde nur mit dem vorhandenen Checkout neu
+  gebaut, die Instanz blieb daher auf der alten Version. Fehlschläge dabei lassen die Instanz unverändert laufen.
+
 ## 0.15.0 (2026-10-10)
 - Neu: Ein Instanz-Update zeigt seinen **Fortschritt in der Spalte „Fortschritt“** (Balken mit Schritt: Sicherung prüfen,
   Sicherung anlegen, bauen und starten, auf Migration warten) - beim Einzel-Knopf, der Admin-Aktion und im Gesamt-Rollout.

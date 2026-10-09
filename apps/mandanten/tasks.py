@@ -48,7 +48,9 @@ def mandant_backup_task(mandant_id):
 
 @shared_task
 def mandant_update_task(mandant_id):
-    _ausfuehren(betrieb.update_mit_sicherung, mandant_id, protokollieren=True)
+    from . import updates
+    _ausfuehren(lambda m: betrieb.update_mit_sicherung(m, vorher=updates.checkout_aktualisieren),
+                mandant_id, protokollieren=True)
 
 
 @shared_task

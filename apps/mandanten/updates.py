@@ -87,6 +87,20 @@ def fuer_anzeige(anfordern=True):
     return zustand
 
 
+def checkout_aktualisieren():
+    """Fuer das Update einer einzelnen Instanz: holt den neuen Feuerix-Code (git pull --ff-only), falls der Remote
+    neuer ist - sonst wuerde der Neubau nur die alte Version erzeugen. Laeuft gerade ein Gesamt-Rollout, zieht der
+    selbst. Die uebrigen Instanzen bleiben dabei auf der alten Version und erscheinen weiter im Update-Hinweis."""
+    if UpdateZustand.holen().rollout_laeuft:
+        return
+    zustand = pruefen()
+    if zustand.fehler:
+        raise BereitstellungsFehler(f"Prüfung fehlgeschlagen: {zustand.fehler}")
+    if zustand.update_verfuegbar:
+        _git(["pull", "--ff-only"], "git pull im Feuerix-Checkout", timeout=300)
+        pruefen()
+
+
 def ausrollen(pause_sekunden=None):
     """Zieht den neuen Feuerix-Code (git pull --ff-only, falls verfuegbar) und aktualisiert danach nacheinander
     alle laufenden Instanzen, die noch nicht auf der Zielversion sind. Ein Fehler bei einer Instanz stoppt die
