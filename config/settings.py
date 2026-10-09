@@ -55,6 +55,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.mandanten.context.portal_version",
+                "apps.mandanten.context.update_info",
             ],
         },
     },
@@ -133,6 +134,11 @@ CADDY_ACME_EMAIL = os.environ.get("CADDY_ACME_EMAIL", "")
 # Eigene Domain der Portalverwaltung (Weboberflaeche /admin/) - wird mit in den Reverse Proxy eingetragen.
 PORTAL_DOMAIN = os.environ.get("PORTAL_DOMAIN", "")
 PORTAL_PORT = int(os.environ.get("PORTAL_PORT", "8000"))
+# Update-Pruefung fuer Feuerix: so oft (Stunden) prueft das Portal im Hintergrund auf eine neuere Version,
+# sobald jemand die Weboberflaeche oeffnet (0 = aus). Den Rollout startet immer ein Mensch.
+UPDATE_PRUEFUNG_STUNDEN = int(os.environ.get("UPDATE_PRUEFUNG_STUNDEN", "6"))
+# Pause zwischen den Instanzen beim Rollout (Sekunden), damit nicht alle gleichzeitig neu bauen.
+UPDATE_PAUSE_SEKUNDEN = int(os.environ.get("UPDATE_PAUSE_SEKUNDEN", "10"))
 # Nur fuer Tests/lokal: reines HTTP ohne Zertifikate (siehe proxy.py).
 PROXY_NUR_HTTP = _bool("PROXY_NUR_HTTP")
 

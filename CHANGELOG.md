@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.13.0 (2026-10-10)
+- Neu: **Update-Prüfung für Feuerix.** Das Portal prüft im Hintergrund (alle `UPDATE_PRUEFUNG_STUNDEN`, Standard 6,
+  sobald jemand das Admin öffnet; 0 = aus) per `git fetch`, ob der Feuerix-Code eine neuere Version hat, und zeigt auf
+  der Startseite und in der Instanzliste einen Hinweis mit den Änderungen und den veralteten Instanzen.
+- Neu: **„Update jetzt ausrollen“** (nur auf Klick): zieht den neuen Code per `git pull --ff-only` und aktualisiert
+  nacheinander alle laufenden, noch nicht aktuellen Instanzen (Pause `UPDATE_PAUSE_SEKUNDEN` dazwischen, ein Fehler
+  stoppt die anderen nicht). Live-Anzeige des Schritts, Ergebnis danach im Hinweis.
+- Neu: `manage.py mandant_update_pruefen [--ausrollen]` für Kommandozeile/Cron.
+- Datenbank-Migration 0007 (neue Tabelle für den Update-Zustand).
+
 ## 0.12.2 (2026-10-09)
 - Die Start/Stopp/Neustart-Schaltflächen in der Instanzliste sind jetzt runde Symbol-Knöpfe ohne Text (Beschriftung
   als Tooltip), statt breiter Text-Knöpfe.

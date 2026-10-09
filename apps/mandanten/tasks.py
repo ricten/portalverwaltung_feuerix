@@ -49,3 +49,18 @@ def mandant_backup_task(mandant_id):
 @shared_task
 def mandant_update_task(mandant_id):
     _ausfuehren(betrieb.update_ausrollen, mandant_id, protokollieren=True)
+
+
+@shared_task
+def update_pruefen_task():
+    from . import updates
+    updates.pruefen()
+
+
+@shared_task
+def update_ausrollen_task():
+    from . import updates
+    try:
+        updates.ausrollen()
+    except BereitstellungsFehler:
+        pass   # "laeuft bereits" - der laufende Rollout meldet sein Ergebnis selbst

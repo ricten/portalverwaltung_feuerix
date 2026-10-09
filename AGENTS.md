@@ -21,6 +21,11 @@ Reverse Proxy (Caddy) einträgt und betreibt; optional mit Paperless-ngx und Ope
 * Entwicklung/Tests ohne Postgres/Redis: `python manage.py test --settings=config.settings_sqlite`
 * Integrationstest: `.github/workflows/integrationstest.yml` (echte Bereitstellung, läuft bei Push nach `master`).
 
+## Update-Prüfung
+`updates.py`: `pruefen()` (git fetch, Version/Changelog des Upstream) und `ausrollen()` (git pull, dann nacheinander
+`betrieb.update_ausrollen` je veralteter Instanz). Der Rollout startet nie automatisch, nur per Klick/Befehl.
+Zustand in der Tabelle `UpdateZustand` (eine Zeile), Hinweis in `templates/admin/mandanten/update_banner.html`.
+
 ## Regeln
 * Eingaben, die in `.env` oder Caddyfile landen, immer über `validatoren.py` prüfen (Injection).
 * Geheimnisse einer Instanz nie neu erzeugen, wenn sie schon existieren - eine vorhandene Datenbank wäre sonst

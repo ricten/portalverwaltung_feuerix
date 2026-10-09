@@ -6,9 +6,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import betrieb, provisioning, tasks
+from . import betrieb, provisioning, tasks, updates
 from .basis import BereitstellungsFehler
-from .models import MandantInstanz
+from .models import MandantInstanz, UpdateZustand
 
 
 class MandantForm(forms.ModelForm):
@@ -68,9 +68,51 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         eigene = [path("<int:pk>/status/", self.admin_site.admin_view(self.status_json), name="mandanten_status"),
+                  path("update/pruefen/", self.admin_site.admin_view(self.update_pruefen_view),
+                       name="mandanten_update_pruefen"),
+                  path("update/ausrollen/", self.admin_site.admin_view(self.update_ausrollen_view),
+                       name="mandanten_update_ausrollen"),
+                  path("update/status/", self.admin_site.admin_view(self.update_status_view),
+                       name="mandanten_update_status"),
                   path("<int:pk>/dienst/<str:aktion>/", self.admin_site.admin_view(self.dienst_view),
                        name="mandanten_dienst")]
         return eigene + super().get_urls()
+
+    def _zurueck(self, request):
+        return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:index"))
+
+    def update_pruefen_view(self, request):
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+        z = updates.pruefen()
+        if z.fehler:
+            self.message_user(request, f"Prüfung fehlgeschlagen: {z.fehler}", messages.ERROR)
+        elif z.rollout_empfohlen:
+            self.message_user(request, f"Feuerix {z.ziel_version} ist das Ziel - Rollout empfohlen.", messages.WARNING)
+        else:
+            self.message_user(request, f"Feuerix ist aktuell ({z.lokale_version}).", messages.SUCCESS)
+        return self._zurueck(request)
+
+    def update_ausrollen_view(self, request):
+        """Startet den Rollout (git pull + alle veralteten Instanzen nacheinander) - nur auf ausdruecklichen Klick."""
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+        if UpdateZustand.holen().rollout_laeuft:
+            self.message_user(request, "Es läuft bereits ein Rollout.", messages.WARNING)
+        else:
+            tasks.update_ausrollen_task.delay()
+            self.message_user(request, "Rollout gestartet - Fortschritt siehe Hinweis oben.", messages.INFO)
+        return self._zurueck(request)
+
+    def update_status_view(self, request):
+        if not self.has_view_permission(request):
+            return JsonResponse({}, status=403)
+        z = UpdateZustand.holen()
+        return JsonResponse({"laeuft": z.rollout_laeuft, "text": z.rollout_text})
 
     def dienst_view(self, request, pk, aktion):
         """Ziel der Schaltflaechen in der Instanzliste (nur POST, braucht Aenderungsrecht)."""

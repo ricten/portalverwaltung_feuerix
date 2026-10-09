@@ -71,8 +71,11 @@ git pull
 sudo systemctl restart portal-web portal-worker
 ```
 
-Den laufenden Vereins-Instanzen den neuen Feuerix-Code ausrollen: Aktion **Auf aktuellen Feuerix-Code aktualisieren**
-im Admin oder `./venv/bin/python manage.py mandant_update --git-pull`.
+Feuerix-Updates für die Vereins-Instanzen: Das Portal prüft selbst, ob es eine neuere Feuerix-Version gibt, und zeigt auf
+der Startseite des Admins einen Hinweis. Mit **Update jetzt ausrollen** wird der Code gezogen (`git pull`) und alle
+laufenden Instanzen werden nacheinander aktualisiert. Ohne Admin: `./venv/bin/python manage.py mandant_update_pruefen
+--ausrollen`. Voraussetzung: der Feuerix-Checkout hat einen Upstream-Zweig (ein normaler `git clone`) und der Server
+erreicht GitHub. Die Prüfung lässt sich mit `UPDATE_PRUEFUNG_STUNDEN=0` in der `.env` abschalten.
 
 ## Fehlerbehebung
 

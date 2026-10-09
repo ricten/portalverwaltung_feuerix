@@ -1,0 +1,35 @@
+{% if update %}
+<div class="pv-update{% if update.rollout_laeuft %} pv-update-laeuft{% elif update.fehler %} pv-update-fehler{% elif update.rollout_empfohlen %} pv-update-neu{% endif %}"
+     {% if update.rollout_laeuft %}data-url="{% url 'admin:mandanten_update_status' %}"{% endif %}>
+  {% if update.rollout_laeuft %}
+    <strong>Update wird ausgerollt …</strong>
+    <span class="pv-update-text">{{ update.rollout_text|default:"Vorbereitung" }}</span>
+  {% elif update.fehler %}
+    <strong>Update-Prüfung fehlgeschlagen.</strong> <span>{{ update.fehler|truncatechars:300 }}</span>
+    <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Erneut prüfen</button></form>
+  {% elif update.rollout_empfohlen %}
+    <strong>
+      {% if update.update_verfuegbar %}Neue Feuerix-Version {{ update.remote_version }} verfügbar (installiert: {{ update.lokale_version }}).
+      {% else %}Feuerix {{ update.ziel_version }}: nicht alle Instanzen sind auf dieser Version.{% endif %}
+    </strong>
+    {% with veraltet=update.veraltete_instanzen %}
+      {% if veraltet %}<div class="pv-update-liste">Zu aktualisieren:
+        {% for m in veraltet %}<span class="pv-chip">{{ m.kuerzel }} <small>({{ m.feuerix_version|default:"?" }})</small></span>{% endfor %}
+      </div>{% endif %}
+    {% endwith %}
+    {% if update.aenderungen %}<details><summary>Änderungen anzeigen</summary><pre>{{ update.aenderungen }}</pre></details>{% endif %}
+    <div class="pv-update-aktionen">
+      <form method="post" action="{% url 'admin:mandanten_update_ausrollen' %}" onsubmit="return confirm('Update jetzt nacheinander auf alle genannten Instanzen ausrollen? Jede Instanz ist dabei kurz nicht erreichbar.');">{% csrf_token %}
+        <button class="pv-update-knopf pv-update-haupt" type="submit">Update jetzt ausrollen</button>
+      </form>
+      <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Erneut prüfen</button></form>
+    </div>
+  {% else %}
+    <span>Feuerix ist aktuell{% if update.lokale_version %} ({{ update.lokale_version }}){% endif %}{% if update.geprueft_am %} · zuletzt geprüft {{ update.geprueft_am|date:"d.m.Y H:i" }}{% endif %}.</span>
+    <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Jetzt prüfen</button></form>
+  {% endif %}
+  {% if update.rollout_ergebnis and not update.rollout_laeuft %}
+    <div class="pv-update-ergebnis">Letzter Rollout{% if update.rollout_beendet_am %} ({{ update.rollout_beendet_am|date:"d.m.Y H:i" }}){% endif %}: {{ update.rollout_ergebnis }}</div>
+  {% endif %}
+</div>
+{% endif %}

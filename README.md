@@ -49,6 +49,12 @@ Aktuell automatisiert:
   - `python manage.py mandant_status` – Status/Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring/Cron)
   - `python manage.py mandant_backup [kürzel]` – Feuerix' `backup.sh` im Container, Ergebnis wird nach
     `INSTANZEN_VERZEICHNIS/<kürzel>/backups` kopiert (Paperless/OpenSlides-Daten: Volumes separat sichern)
+  - **Update-Hinweis und Rollout**: Das Portal prüft im Hintergrund (`UPDATE_PRUEFUNG_STUNDEN`, Standard 6, 0 = aus), ob
+    der Feuerix-Checkout hinter dem Remote zurückliegt, und zeigt dann auf der Startseite und in der Instanzliste die neue
+    Version, die Änderungen und die veralteten Instanzen. **„Update jetzt ausrollen“** (nur auf Klick) macht `git pull
+    --ff-only` und aktualisiert alle laufenden, noch nicht aktuellen Instanzen nacheinander (Pause
+    `UPDATE_PAUSE_SEKUNDEN`); ein Fehler bei einer Instanz stoppt die übrigen nicht. Kommandozeile:
+    `python manage.py mandant_update_pruefen [--ausrollen]`.
   - `python manage.py mandant_update [--git-pull] [--pause 10]` – rollt den aktuellen Feuerix-Code gestaffelt auf
     alle laufenden Instanzen aus (Migrationen laufen beim Start; ein Fehler stoppt die anderen nicht)
   - `python manage.py mandant_dienst <kürzel> stop|start|restart` – Instanz samt Paperless/OpenSlides anhalten,

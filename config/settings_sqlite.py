@@ -13,5 +13,7 @@ os.environ.setdefault("FIELD_ENCRYPTION_KEY", "PVjt1u2VJDDwB2vjXAFxCEXsGXTTPuf6x
 from config.settings import *  # noqa
 
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
+UPDATE_PRUEFUNG_STUNDEN = 0   # Tests: keine automatische Pruefung
+UPDATE_PAUSE_SEKUNDEN = 0
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True

@@ -39,5 +39,17 @@
     document.body.appendChild(form);
     form.submit();
   });
+  // Rollout-Hinweis: Schritt live aktualisieren, nach Ende neu laden.
+  function updatePruefen() {
+    var el = document.querySelector(".pv-update[data-url]");
+    if (!el) return;
+    fetch(el.dataset.url, {credentials: "same-origin"}).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.laeuft) { location.reload(); return; }
+      var t = el.querySelector(".pv-update-text");
+      if (t && d.text) t.textContent = d.text;
+      setTimeout(updatePruefen, 3000);
+    }).catch(function () { setTimeout(updatePruefen, 5000); });
+  }
+  document.addEventListener("DOMContentLoaded", updatePruefen);
   document.addEventListener("DOMContentLoaded", pruefen);
 })();

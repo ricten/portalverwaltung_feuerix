@@ -93,3 +93,47 @@ class MandantInstanz(models.Model):
         zeile = f"[{timezone.now():%d.%m.%Y %H:%M:%S}] {text}"
         self.protokoll = (self.protokoll + "\n" + zeile).strip()
         self.save(update_fields=["protokoll", "aktualisiert_am"])
+
+
+class UpdateZustand(models.Model):
+    """Einzeiliger Zustand (pk=1) der Update-Pruefung fuer Feuerix und des laufenden Rollouts."""
+    geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True)
+    angefordert_am = models.DateTimeField("Automatische Prüfung angestoßen", null=True, blank=True)
+    fehler = models.TextField("Fehler der letzten Prüfung", blank=True)
+    lokale_version = models.CharField("Installierte Feuerix-Version (Checkout)", max_length=20, blank=True)
+    remote_version = models.CharField("Verfügbare Feuerix-Version", max_length=20, blank=True)
+    aenderungen = models.TextField("Änderungen seit der installierten Version", blank=True)
+    rollout_laeuft = models.BooleanField("Rollout läuft", default=False)
+    rollout_gestartet_am = models.DateTimeField(null=True, blank=True)
+    rollout_text = models.CharField("Rollout-Schritt", max_length=200, blank=True)
+    rollout_ergebnis = models.TextField("Ergebnis des letzten Rollouts", blank=True)
+    rollout_beendet_am = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Update-Zustand"
+        verbose_name_plural = "Update-Zustand"
+
+    @classmethod
+    def holen(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    @property
+    def update_verfuegbar(self):
+        from .updates import versionstupel
+        return bool(self.remote_version and self.lokale_version
+                    and versionstupel(self.remote_version) > versionstupel(self.lokale_version))
+
+    @property
+    def ziel_version(self):
+        return self.remote_version if self.update_verfuegbar else self.lokale_version
+
+    @property
+    def veraltete_instanzen(self):
+        """Laufende Instanzen, die nicht auf der Zielversion sind."""
+        if not self.ziel_version:
+            return []
+        return list(MandantInstanz.objects.filter(status="laeuft").exclude(feuerix_version=self.ziel_version))
+
+    @property
+    def rollout_empfohlen(self):
+        return self.update_verfuegbar or bool(self.veraltete_instanzen)
