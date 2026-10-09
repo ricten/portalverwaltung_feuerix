@@ -224,3 +224,23 @@ class VersionInFusszeileTests(TestCase):
         self.assertRegex(settings.PORTAL_VERSION, r"^\d+\.\d+\.\d+$")
         antwort = self.client.get("/admin/login/")
         self.assertContains(antwort, f"Version {settings.PORTAL_VERSION}")
+
+
+class EnvDateiTests(TestCase):
+    def test_laedt_ohne_vorhandene_variablen_zu_ueberschreiben(self):
+        import os
+        from config import envdatei
+        with tempfile.TemporaryDirectory() as tmp:
+            datei = Path(tmp) / ".env"
+            datei.write_text('# Kommentar\nENVTEST_NEU=abc=def\nENVTEST_ALT=neu\nENVTEST_Q="mit Leerzeichen"\n\n',
+                             encoding="utf-8")
+            with patch.dict(os.environ, {"ENVTEST_ALT": "bleibt"}):
+                envdatei.laden(datei)
+                self.assertEqual(os.environ["ENVTEST_NEU"], "abc=def")
+                self.assertEqual(os.environ["ENVTEST_ALT"], "bleibt")
+                self.assertEqual(os.environ["ENVTEST_Q"], "mit Leerzeichen")
+                del os.environ["ENVTEST_NEU"], os.environ["ENVTEST_Q"]
+
+    def test_fehlende_datei_ist_kein_fehler(self):
+        from config import envdatei
+        envdatei.laden("/gibt/es/nicht/.env")

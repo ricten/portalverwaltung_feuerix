@@ -4,6 +4,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+from . import envdatei  # noqa: E402
+
+envdatei.laden()
+
 
 def _bool(name, default="0"):
     return os.environ.get(name, default).lower() in ("1", "true", "yes", "ja")
