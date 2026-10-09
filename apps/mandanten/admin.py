@@ -52,13 +52,13 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     actions = ["bereitstellen", "starten", "stoppen", "neustarten", "pausieren", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
-    # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, Symbol, Farbklasse, Rueckfrage)
+    # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
     DIENSTE = {
-        "starten": (("gestoppt", "pausiert", "fehlgeschlagen"), tasks.mandant_starten_task, "Starten", "▶",
+        "starten": (("gestoppt", "pausiert", "fehlgeschlagen"), tasks.mandant_starten_task, "Starten", "M8 5v14l11-7z",
                     "pv-start", ""),
-        "stoppen": (("laeuft", "fehlgeschlagen"), tasks.mandant_stoppen_task, "Stoppen", "■", "pv-stopp",
+        "stoppen": (("laeuft", "fehlgeschlagen"), tasks.mandant_stoppen_task, "Stoppen", "M6 6h12v12H6z", "pv-stopp",
                     "Instanz wirklich stoppen? Sie ist danach nicht erreichbar."),
-        "neustarten": (("laeuft", "fehlgeschlagen"), tasks.mandant_neustarten_task, "Neustarten", "↻",
+        "neustarten": (("laeuft", "fehlgeschlagen"), tasks.mandant_neustarten_task, "Neustarten", "M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z",
                        "pv-neustart", "Instanz neu starten? Sie ist kurz nicht erreichbar."),
     }
 
@@ -89,10 +89,11 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         knoepfe = []
         for aktion, (erlaubt, _task, text, symbol, klasse, frage) in self.DIENSTE.items():
             knoepfe.append(format_html(
-                '<button type="button" class="pv-knopf {}" data-url="{}" data-frage="{}" title="{}"{}>'
-                '<span aria-hidden="true">{}</span> {}</button>',
-                klasse, reverse("admin:mandanten_dienst", args=[obj.pk, aktion]), frage, text,
-                "" if obj.status in erlaubt else mark_safe(" disabled"), symbol, text))
+                '<button type="button" class="pv-knopf {}" data-url="{}" data-frage="{}" title="{}" '
+                'aria-label="{}"{}><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">'
+                '<path fill="currentColor" d="{}"/></svg></button>',
+                klasse, reverse("admin:mandanten_dienst", args=[obj.pk, aktion]), frage, text, text,
+                "" if obj.status in erlaubt else mark_safe(" disabled"), symbol))
         return format_html('<div class="pv-knoepfe">{}</div>', mark_safe("".join(knoepfe)))
 
     def status_json(self, request, pk):
