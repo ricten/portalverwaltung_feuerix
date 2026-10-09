@@ -216,3 +216,11 @@ class ZugangsdatenAnzeigenTests(TestCase):
         antwort = self.client.post("/admin/mandanten/mandantinstanz/", {
             "action": "zugangsdaten_anzeigen", "_selected_action": [m.pk]}, follow=True)
         self.assertContains(antwort, "geheim123")
+
+
+class VersionInFusszeileTests(TestCase):
+    def test_version_steht_in_der_fusszeile(self):
+        from django.conf import settings
+        self.assertRegex(settings.PORTAL_VERSION, r"^\d+\.\d+\.\d+$")
+        antwort = self.client.get("/admin/login/")
+        self.assertContains(antwort, f"Version {settings.PORTAL_VERSION}")

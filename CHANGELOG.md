@@ -4,6 +4,11 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.9.0 (2026-10-09)
+- Neu: Die Version der Portalverwaltung steht in der Fußzeile der Weboberfläche (Quelle: `VERSION.md`).
+- Neu: `INSTALL.md` mit Voraussetzungen, Installation, Update, Fehlerbehebung und manueller Installation;
+  `README.md` verweist darauf und beschreibt die neuen Funktionen.
+
 ## 0.8.0 (2026-10-09)
 - Neu: Admin-Aktion „Zugangsdaten des Instanz-Administrators anzeigen“ (nur Superuser, wird im Protokoll
   vermerkt). Bisher war das Startpasswort einer neuen Instanz nirgends einsehbar.

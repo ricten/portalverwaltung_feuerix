@@ -1,0 +1,15 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | Portalverwaltung{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">Portalverwaltung für Feuerix</a></div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block footer %}
+<div id="footer" style="text-align:center;padding:12px;font-size:12px;color:var(--body-quiet-color, #888)">
+  Portalverwaltung für Feuerix &middot; Version {{ portal_version }}
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,6 +50,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.mandanten.context.portal_version",
             ],
         },
     },
@@ -98,6 +100,16 @@ if HTTPS:
     SECURE_SSL_REDIRECT = True
 
 # --- Portalverwaltung-spezifisch ---
+# Eigene Version (Fusszeile der Weboberflaeche): steht fett in VERSION.md, z. B. **0.9.0**.
+def _portal_version():
+    try:
+        treffer = re.search(r"\*\*(\d+\.\d+\.\d+)\*\*", (BASE_DIR / "VERSION.md").read_text(encoding="utf-8"))
+    except OSError:
+        treffer = None
+    return treffer.group(1) if treffer else "unbekannt"
+
+
+PORTAL_VERSION = _portal_version()
 # Pfad zum lokalen Checkout des Feuerix-Quellcodes ("vereinsverwaltung") - von dort wird die dortige
 # docker-compose.yml direkt fuer jede neue Instanz verwendet (kein Kopieren, damit Aenderungen daran
 # automatisch fuer neue Bereitstellungen gelten).

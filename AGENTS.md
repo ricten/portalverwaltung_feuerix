@@ -30,6 +30,11 @@ Reverse Proxy (Caddy) einträgt und betreibt; optional mit Paperless-ngx und Ope
 * Docker-/Compose-Aufrufe nur über `basis.docker()`, Pfade in Compose-Dateien über `basis.yaml_pfad()`.
 * Shell-Skripte mit LF-Zeilenenden (siehe `.gitattributes`).
 
+## Dokumentation
+Bei jeder Änderung die Doku mitpflegen: [README.md](README.md) (Funktionen, Betrieb), [INSTALL.md](INSTALL.md)
+(Installation, Update, Fehlerbehebung - neu entdeckte Stolpersteine dort eintragen) und diese Datei, falls sich
+Aufbau oder Regeln ändern. Die Version in der Fußzeile des Portals kommt aus `VERSION.md` (fett, `**x.y.z**`).
+
 ## Versionierung
 Bei jeder Änderung mit Nutzerwirkung: Nummer in [VERSION.md](VERSION.md) erhöhen (Semantic Versioning) und einen
 Eintrag oben in [CHANGELOG.md](CHANGELOG.md) schreiben. Nach dem Commit den Stand mit einem annotierten Git-Tag

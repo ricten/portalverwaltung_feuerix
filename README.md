@@ -5,6 +5,9 @@ Automatisierte Bereitstellung vollständig isolierter [Feuerix](https://github.c
 Mehrmandanten-Hosting, im Unterschied zur bereits in Feuerix selbst eingebauten (aber pro Instanz auf einen
 Verein gesperrten) Mandantenfähigkeit.
 
+**Aktuelle Version:** siehe [VERSION.md](VERSION.md) (auch in der Fußzeile der Weboberfläche) ·
+[Änderungsprotokoll](CHANGELOG.md) · **[Installationsanleitung](INSTALL.md)**
+
 ## Stand: Ausbaustufe 1, 1b und 2 (Betrieb)
 
 Aktuell automatisiert:
@@ -55,20 +58,24 @@ Zertifikats-/Backup-Rotation über 14 Sicherungen hinaus (das übernimmt Feuerix
 
 ## Installation (interaktiv) und Weboberfläche
 
-Auf einem Linux-Server mit Docker: `./install.sh`. Der Assistent fragt, welche Komponenten installiert werden
+Ausführliche Schritt-für-Schritt-Anleitung samt Fehlerbehebung: **[INSTALL.md](INSTALL.md)**. Kurzfassung – auf einem
+Linux-Server mit Docker (Repo vollständig klonen, ohne `sudo`): `./install.sh`. Der Assistent fragt, welche Komponenten installiert werden
 sollen (PostgreSQL + Redis als Container, Caddy als Reverse Proxy, Celery-Worker und Weboberfläche als
 systemd-Dienste, eigene Domain der Portalverwaltung), erzeugt `.env` mit Zufallsgeheimnissen, migriert und
 legt den Administrator an. OpenSlides und Paperless wählst du je Verein über die Domain-Felder.
 
 Im Instanzformular gibt es Haken „Paperless-ngx installieren“ und „OpenSlides installieren“ (ohne eigene Domain
 wird `paperless.<domain>` bzw. `openslides.<domain>` genommen – DNS bzw. Wildcard-DNS nötig). Bei einer bereits
-laufenden Instanz wird der Dienst nach dem Speichern automatisch nachinstalliert.
+laufenden Instanz wird der Dienst nach dem Speichern automatisch nachinstalliert. Fehlt der Feuerix-Checkout, klont
+der Installer ihn auf Wunsch selbst.
 
 Die **Weboberfläche** ist das Django-Admin (`/admin/`, bei gesetzter `PORTAL_DOMAIN` automatisch über Caddy mit
-HTTPS): Die Instanzliste zeigt Status, Version und eine **Live-Erreichbarkeit je Dienst** (grün/rot), dazu
+HTTPS): Die Instanzliste zeigt Status, Version und eine **Live-Erreichbarkeit je Dienst** (grün/rot), die **Version der Portalverwaltung in der Fußzeile**, dazu
 Aktionen zum Bereitstellen, Pausieren, Sichern und Aktualisieren, das Protokoll je Instanz, einen
 **Fortschrittsbalken mit aktuellem Schritt** während der Bereitstellung (aktualisiert sich ohne Neuladen) und die
-Aktion **„Admin-Passwort der Instanz zurücksetzen“** (neues Passwort wird einmalig angezeigt).
+Aktionen **„Zugangsdaten des Instanz-Administrators anzeigen“** (nur Superuser; zeigt das Startpasswort) und
+**„Admin-Passwort der Instanz zurücksetzen“** (neues Passwort wird einmalig angezeigt). Die Startseite `/` leitet
+auf `/admin/` um.
 
 ## Ablauf
 
