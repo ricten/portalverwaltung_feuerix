@@ -244,3 +244,40 @@ class EnvDateiTests(TestCase):
     def test_fehlende_datei_ist_kein_fehler(self):
         from config import envdatei
         envdatei.laden("/gibt/es/nicht/.env")
+
+
+class PortvergabeTests(TestCase):
+    def _m(self, kuerzel, **kw):
+        return MandantInstanz.objects.create(kuerzel=kuerzel, verein_name=kuerzel, domain=f"{kuerzel}.example.org", **kw)
+
+    def test_belegte_ports_in_allen_feldern_werden_uebersprungen(self):
+        from . import basis
+        self._m("a", web_port=8100, paperless_port=8101, openslides_port=8102, openslides_manage_port=8103)
+        self.assertEqual(basis.naechster_freier_port("web_port", 8100), 8104)
+
+    def test_tatsaechlich_belegte_ports_werden_uebersprungen(self):
+        from . import basis
+        belegt = {8100, 8101}
+        with override_settings(PORT_PRUEFUNG=True), \
+             patch("apps.mandanten.basis.port_frei", side_effect=lambda p: p not in belegt):
+            self.assertEqual(basis.naechster_freier_port("web_port", 8100), 8102)
+
+    def test_port_frei_erkennt_einen_gebundenen_port(self):
+        import socket
+        from . import basis
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s, override_settings(PORT_PRUEFUNG=True):
+            s.bind(("127.0.0.1", 0))
+            s.listen()
+            port = s.getsockname()[1]
+            self.assertFalse(basis.port_frei(port))
+        with override_settings(PORT_PRUEFUNG=True):
+            self.assertTrue(basis.port_frei(port))      # nach dem Schliessen wieder frei
+        with override_settings(PORT_PRUEFUNG=False):
+            self.assertTrue(basis.port_frei(1))          # Pruefung abgeschaltet
+
+    def test_ohne_freien_port_gibt_es_einen_klaren_fehler(self):
+        from . import basis
+        from .basis import BereitstellungsFehler
+        with patch("apps.mandanten.basis.port_frei", return_value=False):
+            with self.assertRaises(BereitstellungsFehler):
+                basis.naechster_freier_port("web_port", 64990)

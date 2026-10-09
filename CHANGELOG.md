@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.23.1 (2026-10-10)
+- Fix: **OpenSlides bei mehreren Instanzen.** Der Verwaltungsdienst (`backendManage`) lag bei jeder Instanz auf dem Host-Port
+  9002; bei der zweiten kollidierte das („port is already allocated“), und `osmanage initial-data` landete bei der falschen
+  Instanz (HTTP 401, „Startdaten konnten nicht angelegt werden“). Jede neue Instanz bekommt jetzt einen eigenen
+  Verwaltungsport (ab `OPENSLIDES_MANAGE_PORT_BASIS`, Standard 9200), `osmanage` wird mit `--address` und `--password-file`
+  aufgerufen, und ein noch nicht initialisierter Stack, der mit 9002 erzeugt wurde und mit einer anderen Instanz kollidiert,
+  wird beim erneuten Bereitstellen samt (leerer) Datenbank entfernt und mit eigenem Port neu erzeugt. Bereits
+  initialisierte Instanzen werden nie angefasst. Migration 0014.
+- **Portvergabe prüft jetzt die Belegung auf dem Server**: Ein Port gilt nur als frei, wenn ihn keine Instanz in irgendeinem
+  Port-Feld hat und er auf dem Server tatsächlich nicht belegt ist (Bind-Versuch; `PORT_PRUEFUNG=0` schaltet das ab).
+- OpenSlides-Update aus dem Portal nur noch für Patch-Versionen (z. B. 4.3.0 → 4.3.1) über den offiziellen Weg
+  (`osmanage config --force`); Minor-/Major-Sprünge (Migrationen, PostgreSQL-Wechsel) bitte nach der OpenSlides-Anleitung von Hand.
+
 ## 0.23.0 (2026-10-10)
 - Neu: **Update von Paperless-ngx und OpenSlides aus dem Portal** (nur auf Klick, nie automatisch): In der Spalte „Version“
   erscheint bei veralteter Version ein Pfeil-Knopf. Paperless: Export der Dokumente (`document_exporter`) → `pull` → `up -d`

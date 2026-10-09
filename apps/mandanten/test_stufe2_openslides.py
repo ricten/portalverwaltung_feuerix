@@ -195,3 +195,118 @@ class AbbauTests(TestCase):
             with patch("apps.mandanten.basis.subprocess.run") as run:
                 openslides.abbauen(_mandant(openslides_domain=""))
             run.assert_not_called()
+
+
+class VerwaltungsportTests(TestCase):
+    def test_neue_stacks_bekommen_eigene_verwaltungsports_in_der_config(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            _feuerix(tmp)
+            a = _mandant(kuerzel="a")
+            b = _mandant(kuerzel="b", domain="b.example.org", openslides_domain="v.b.example.org")
+            text_a = openslides.config_erzeugen(a).read_text(encoding="utf-8")
+            text_b = openslides.config_erzeugen(b).read_text(encoding="utf-8")
+        self.assertNotEqual(a.openslides_manage_port, b.openslides_manage_port)
+        self.assertGreaterEqual(a.openslides_manage_port, 9200)
+        self.assertIn(f"backendManagePort: {a.openslides_manage_port}", text_a)
+        self.assertIn(f"backendManagePort: {b.openslides_manage_port}", text_b)
+        self.assertEqual(text_a.count("backendManagePort"), 1)
+
+    def test_vorhandene_config_behaelt_ihren_versions_tag(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            _feuerix(tmp)
+            m = _mandant()
+            verz = Path(tmp) / "os" / "openslides"
+            verz.mkdir(parents=True)
+            (verz / "config.yml").write_text("port: 9100\ndefaults:\n  tag: 4.3.7\n", encoding="utf-8")
+            (verz / "docker-compose.yml").write_text("services: {}\n")
+            text = openslides.config_erzeugen(m).read_text(encoding="utf-8")
+        self.assertIn("tag: 4.3.7", text)
+        self.assertNotIn("tag: 4.3.0", text)
+
+    def test_alte_instanz_mit_vorhandener_compose_datei_bekommt_keinen_neuen_port(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            _feuerix(tmp)
+            m = _mandant()
+            verz = Path(tmp) / "os" / "openslides"
+            verz.mkdir(parents=True)
+            (verz / "docker-compose.yml").write_text("services: {}\n")
+            text = openslides.config_erzeugen(m).read_text(encoding="utf-8")
+        self.assertIsNone(m.openslides_manage_port)
+        self.assertNotIn("backendManagePort", text)
+        self.assertEqual(openslides.verwaltungsport(m), 9002)
+
+    def test_initial_data_nutzt_den_verwaltungsport_und_die_passwortdatei(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _mandant(openslides_manage_port=9201)
+            verz = Path(tmp) / "os" / "openslides"
+            (verz / "secrets").mkdir(parents=True)
+            (verz / "secrets" / "internal_auth_password").write_text("x")
+            with patch("apps.mandanten.basis.docker") as d:
+                openslides.startdaten_anlegen(m, Path("osmanage"), pause_sekunden=0)
+        befehl = d.call_args.args[0]
+        self.assertEqual(befehl[befehl.index("--address") + 1], "localhost:9201")
+        self.assertIn("--password-file", befehl)
+        self.assertEqual(befehl[befehl.index("--password-file") + 1], "secrets/internal_auth_password")
+
+    def test_alte_instanz_spricht_weiter_port_9002_an(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m = _mandant()
+            with patch("apps.mandanten.basis.docker") as d:
+                openslides.startdaten_anlegen(m, Path("osmanage"), pause_sekunden=0)
+        befehl = d.call_args.args[0]
+        self.assertEqual(befehl[befehl.index("--address") + 1], "localhost:9002")
+
+
+class KollisionReparaturTests(TestCase):
+    def _vorbereiten(self, tmp, **kw):
+        _feuerix(tmp)
+        (Path(tmp) / "_werkzeuge").mkdir()
+        (Path(tmp) / "_werkzeuge" / "osmanage").write_text("x")
+        (Path(tmp) / "_werkzeuge" / "docker-compose.yml.tmpl").write_text("x")
+        m = _mandant(**kw)
+        verz = Path(tmp) / m.kuerzel / "openslides"
+        (verz / "secrets").mkdir(parents=True)
+        (verz / "secrets" / "superadmin").write_text("ALT")
+        (verz / "docker-compose.yml").write_text("services: {}  # 127.0.0.1:9002:9002\n")
+        return m, verz
+
+    def _fake(self):
+        def fake(befehl, was, **kw):
+            if "setup" in befehl:
+                verz = Path(kw["cwd"])
+                (verz / "secrets").mkdir(exist_ok=True)
+                (verz / "secrets" / "superadmin").write_text("NEU")
+                (verz / "docker-compose.yml").write_text("services: {}  # neu\n")
+            return ""
+        return fake
+
+    def test_nicht_initialisierte_kollision_wird_neu_erzeugt(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            andere = _mandant(kuerzel="andere", domain="andere.example.org", openslides_domain="v.andere.example.org")
+            m, verz = self._vorbereiten(tmp)
+            with patch("apps.mandanten.basis.docker", side_effect=self._fake()) as d:
+                openslides.einrichten(m)
+            befehle = [c.args[0] for c in d.call_args_list]
+            self.assertIn(["docker", "compose", "down", "-v"], befehle)
+            self.assertTrue(any("setup" in b for b in befehle))
+            self.assertIn("neu", (verz / "docker-compose.yml").read_text())
+            self.assertIn("backendManagePort", (verz / "config.yml").read_text())
+            m.refresh_from_db()
+            self.assertIsNotNone(m.openslides_manage_port)
+            self.assertEqual(m.openslides_superadmin_passwort, "NEU")
+
+    def test_initialisierte_instanz_wird_nie_angefasst(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            _mandant(kuerzel="andere", domain="andere.example.org", openslides_domain="v.andere.example.org")
+            m, verz = self._vorbereiten(tmp, openslides_initialisiert=True)
+            with patch("apps.mandanten.basis.docker") as d:
+                openslides.einrichten(m)
+            d.assert_not_called()
+            self.assertIn("9002", (verz / "docker-compose.yml").read_text())
+
+    def test_ohne_andere_instanz_bleibt_alles_wie_es_ist(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            m, verz = self._vorbereiten(tmp)
+            with patch("apps.mandanten.basis.docker") as d:
+                openslides.einrichten(m)
+            d.assert_not_called()

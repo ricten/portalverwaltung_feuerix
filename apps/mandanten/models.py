@@ -61,6 +61,10 @@ class MandantInstanz(models.Model):
                   "automatisch openslides.<Domain> verwendet. Die Installation, den Reverse-Proxy-Eintrag und die "
                   "Anbindung in Feuerix übernimmt das Portal.")
     openslides_port = models.PositiveIntegerField("OpenSlides-Port", null=True, blank=True, editable=False)
+    # Verwaltungsport (backendManage) des OpenSlides-Stacks auf dem Host. Der Standard 9002 kollidiert bei mehreren
+    # Instanzen und fuehrt bei `osmanage initial-data` zu "401". None = alte Instanz mit dem Standard 9002.
+    openslides_manage_port = models.PositiveIntegerField("OpenSlides-Verwaltungsport", null=True, blank=True,
+                                                         editable=False)
     openslides_superadmin_passwort = VerschluesseltesTextField("OpenSlides Superadmin-Passwort", blank=True,
                                                                editable=False)
     openslides_initialisiert = models.BooleanField("OpenSlides initialisiert", default=False, editable=False)

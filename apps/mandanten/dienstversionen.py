@@ -48,10 +48,19 @@ def paperless_laufend(mandant, timeout=8):
 
 
 def openslides_konfiguriert(mandant):
-    """OpenSlides-Version aus dem `tag:` der erzeugten config.yml der Instanz (leer, wenn nicht vorhanden)."""
-    pfad = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel / "openslides" / "config.yml"
+    """OpenSlides-Version der Instanz: aus den OpenSlides-Images der erzeugten docker-compose.yml (das ist, was wirklich
+    laeuft), sonst aus dem `tag:` der config.yml. Leer, wenn beides fehlt."""
+    verz = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel / "openslides"
     try:
-        treffer = re.search(r"^\s*tag:\s*['\"]?([^\s'\"#]+)", pfad.read_text(encoding="utf-8"), re.MULTILINE)
+        treffer = re.search(r"(?m)^\s*image:\s*\S*openslides\S*:v?(\d+\.\d+\.\d+)\s*$",
+                            (verz / "docker-compose.yml").read_text(encoding="utf-8"))
+        if treffer:
+            return treffer.group(1)
+    except OSError:
+        pass
+    try:
+        treffer = re.search(r"^\s*tag:\s*['\"]?([^\s'\"#]+)", (verz / "config.yml").read_text(encoding="utf-8"),
+                            re.MULTILINE)
     except OSError:
         return ""
     return treffer.group(1).lstrip("vV")[:30] if treffer else ""

@@ -4,6 +4,7 @@ mit `osmanage` (wie Feuerix' openslides/install.sh). Der Stack bekommt den Proje
 Danach wird die Anbindung (Superadmin) in der Feuerix-Instanz des Mandanten hinterlegt.
 """
 import re
+import shutil
 import time
 import urllib.error
 import urllib.request
@@ -72,13 +73,55 @@ def config_erzeugen(mandant):
         mandant.save(update_fields=["openslides_port"])
     text = re.sub(r"(?m)^port:.*$", f"port: {int(mandant.openslides_port)}", quelle.read_text(encoding="utf-8"))
     pfad = _verzeichnis(mandant) / "config.yml"
+    if pfad.exists():
+        # Bereits eingerichtet/aktualisiert: den dort stehenden Versions-Tag behalten, nicht auf den der Vorlage zuruecksetzen
+        vorhanden = re.search(r"(?m)^(\s*)tag:\s*(\S+)", pfad.read_text(encoding="utf-8"))
+        if vorhanden:
+            text = re.sub(r"(?m)^(\s*tag:\s*)\S+", lambda m: m.group(1) + vorhanden.group(2), text, count=1)
+    if not mandant.openslides_manage_port and not (_verzeichnis(mandant) / "docker-compose.yml").exists():
+        # Neuer Stack: eigener Verwaltungsport statt des gemeinsamen Standards 9002
+        mandant.openslides_manage_port = basis.naechster_freier_port("openslides_manage_port",
+                                                                     settings.OPENSLIDES_MANAGE_PORT_BASIS)
+        mandant.save(update_fields=["openslides_manage_port"])
+    if mandant.openslides_manage_port:
+        zeile = f"backendManagePort: {int(mandant.openslides_manage_port)}"
+        if re.search(r"(?m)^backendManagePort:", text):
+            text = re.sub(r"(?m)^backendManagePort:.*$", zeile, text)
+        else:
+            text = re.sub(r"(?m)^(port:.*)$", lambda m: m.group(1) + "\n" + zeile, text, count=1)
     pfad.write_text(text, encoding="utf-8")
     return pfad
+
+
+def verwaltungsport(mandant):
+    """Host-Port des Verwaltungsdienstes (backendManage), an den `osmanage` sich wendet."""
+    return mandant.openslides_manage_port or 9002
+
+
+def _kollision_reparieren(mandant, verz):
+    """Ein noch nicht initialisierter Stack, der mit dem gemeinsamen Verwaltungsport 9002 erzeugt wurde, kollidiert mit
+    anderen Instanzen (`initial-data` landet bei der falschen Instanz -> 401). Er wird samt (leerer) Datenbank entfernt
+    und mit eigenem Port neu erzeugt. Eine bereits initialisierte Instanz wird NIE angefasst."""
+    from .models import MandantInstanz
+    if mandant.openslides_initialisiert or mandant.openslides_manage_port or not (verz / "docker-compose.yml").exists():
+        return
+    if not MandantInstanz.objects.exclude(pk=mandant.pk).filter(
+            openslides_domain__gt="", openslides_manage_port__isnull=True).exists():
+        return
+    mandant.protokollieren("OpenSlides: Verwaltungsport 9002 wird von mehreren Instanzen genutzt - Stack wird mit "
+                           "eigenem Port neu erzeugt (noch keine Daten vorhanden).")
+    basis.docker(["docker", "compose", "down", "-v"], "OpenSlides: alten Stack entfernen", timeout=300, cwd=verz,
+                 env=_env(mandant))
+    (verz / "docker-compose.yml").unlink()
+    geheimnisse = verz / "secrets"
+    if geheimnisse.exists():
+        shutil.rmtree(geheimnisse)
 
 
 def einrichten(mandant):
     verz = _verzeichnis(mandant)
     osmanage, vorlage = werkzeuge_bereitstellen()
+    _kollision_reparieren(mandant, verz)
     config = config_erzeugen(mandant)
     if not (verz / "docker-compose.yml").exists():
         basis.docker([str(osmanage), "setup", "-c", str(config), "-t", str(vorlage), "."],
@@ -112,8 +155,11 @@ def startdaten_anlegen(mandant, osmanage, versuche=18, pause_sekunden=10):
     letzter = None
     for _ in range(versuche):
         try:
-            basis.docker([str(osmanage), "initial-data", "--superadmin-password-file", "secrets/superadmin"],
-                         "OpenSlides: initial-data", timeout=120, cwd=verz, env=_env(mandant))
+            befehl = [str(osmanage), "initial-data", "--address", f"localhost:{verwaltungsport(mandant)}"]
+            if (verz / "secrets" / "internal_auth_password").exists():
+                befehl += ["--password-file", "secrets/internal_auth_password"]
+            befehl += ["--superadmin-password-file", "secrets/superadmin"]
+            basis.docker(befehl, "OpenSlides: initial-data", timeout=120, cwd=verz, env=_env(mandant))
             mandant.openslides_initialisiert = True
             mandant.save(update_fields=["openslides_initialisiert"])
             mandant.protokollieren("OpenSlides: Startdaten angelegt.")

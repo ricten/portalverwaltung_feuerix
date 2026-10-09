@@ -191,24 +191,26 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                 continue
             alt = bool(versionstupel(v) and versionstupel(neu) and versionstupel(v) < versionstupel(neu))
             knopf = ""
-            if alt and obj.status == "laeuft" and not zustand.rollout_laeuft:
+            nur_manuell = bool(alt and dienst == "openslides" and versionstupel(v)[:2] != versionstupel(neu)[:2])
+            if alt and not nur_manuell and obj.status == "laeuft" and not zustand.rollout_laeuft:
                 if dienst == "paperless":
                     frage = (f"Paperless-ngx von {v} auf {neu} aktualisieren? Vorher wird ein Export der Dokumente "
                              "angelegt (Ordner export der Instanz); schlägt er fehl, wird nichts geändert. Paperless "
                              "ist kurz nicht erreichbar, Feuerix läuft weiter. Bei Paperless entscheidet der Hersteller, "
                              "welche Datenbank-Migrationen mit der neuen Version laufen.")
                 else:
-                    frage = (f"OpenSlides von {v} auf {neu} aktualisieren? Vorher wird ein Datenbank-Dump gesichert; "
-                             "schlägt er fehl, wird nichts geändert. Das Portal ändert nur die Versionsnummer und "
-                             "startet neu - falls die Release-Hinweise von OpenSlides zusätzliche Migrationsschritte "
-                             "verlangen, müssen diese danach von Hand erfolgen. OpenSlides ist kurz nicht erreichbar.")
+                    frage = (f"OpenSlides von {v} auf {neu} aktualisieren (Patch-Update)? Vorher wird ein "
+                             "Datenbank-Dump gesichert; schlägt er fehl, wird nichts geändert. Die Compose-Datei wird "
+                             "nach der OpenSlides-Anleitung neu erzeugt (osmanage config --force). OpenSlides ist kurz "
+                             "nicht erreichbar.")
                 knopf = format_html(
                     ' <button type="button" class="pv-knopf pv-update-einzeln" data-url="{}" data-frage="{}" '
                     'title="{} auf {} aktualisieren" aria-label="{} aktualisieren"><svg viewBox="0 0 24 24" width="14" '
                     'height="14" aria-hidden="true"><path fill="currentColor" d="M12 3l-8 8h5v9h6v-9h5z"/></svg></button>',
                     reverse("admin:mandanten_dienst", args=[obj.pk, f"{dienst}_update"]), frage, name, neu, name)
             zeilen.append(format_html('<small{}>{} {}{}</small>{}', mark_safe(' style="color:#ef6c00"') if alt else "",
-                                      name, v, f" → {neu} verfügbar" if alt else "", knopf))
+                                      name, v, (f" → {neu} verfügbar" + (" (nur von Hand, siehe OpenSlides-Anleitung)" if nur_manuell else ""))
+                                      if alt else "", knopf))
         if not zeilen:
             return text
         return format_html("{}<br>{}", text, mark_safe("<br>".join(str(z) for z in zeilen)))

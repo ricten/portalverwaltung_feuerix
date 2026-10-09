@@ -39,13 +39,11 @@ def paperless_aktualisieren(mandant):
     return neu
 
 
-def _tag_ersetzen(text, alt, neu):
-    """Ersetzt den Image-Tag `alt` durch `neu` in den OpenSlides-Image-Zeilen. -> (neuer Text, Anzahl)"""
-    muster = re.compile(rf"(?m)^(\s*image:\s*\S*openslides\S*:){re.escape(alt)}(\s*)$")
-    return muster.subn(rf"\g<1>{neu}\g<2>", text)
-
-
 def openslides_aktualisieren(mandant, neu):
+    """Patch-Update (gleiche Haupt- und Nebenversion, z. B. 4.3.0 -> 4.3.1) nach der offiziellen OpenSlides-Anleitung:
+    Tag in der config.yml setzen, Compose-Datei mit `osmanage config --force` neu erzeugen, `pull`, `up --detach`.
+    Spruenge der Minor-/Major-Version bringen Datenmigrationen und teils einen PostgreSQL-Wechsel mit (siehe
+    INSTALL.md von OpenSlides) und werden NICHT automatisch durchgefuehrt."""
     verz = openslides._verzeichnis(mandant)
     compose, config = verz / "docker-compose.yml", verz / "config.yml"
     alt = dienstversionen.openslides_konfiguriert(mandant)
@@ -53,8 +51,10 @@ def openslides_aktualisieren(mandant, neu):
         raise BereitstellungsFehler("OpenSlides: Stack-Konfiguration der Instanz nicht gefunden.")
     if not re.fullmatch(r"\d+\.\d+\.\d+", neu) or versionstupel(neu) <= versionstupel(alt):
         raise BereitstellungsFehler(f"OpenSlides: Version {neu} ist keine Aktualisierung von {alt}.")
-    if versionstupel(neu)[0] != versionstupel(alt)[0]:
-        raise BereitstellungsFehler(f"OpenSlides: Wechsel der Hauptversion ({alt} → {neu}) bitte von Hand durchführen.")
+    if versionstupel(neu)[:2] != versionstupel(alt)[:2]:
+        raise BereitstellungsFehler(
+            f"OpenSlides: Der Sprung {alt} → {neu} ist kein Patch-Update. Bitte von Hand nach der Anleitung von "
+            "OpenSlides durchführen (Datenmigrationen, ggf. neue PostgreSQL-Version).")
     umgebung = openslides._env(mandant)
     compose_befehl = ["docker", "compose"]
 
@@ -71,13 +71,17 @@ def openslides_aktualisieren(mandant, neu):
 
     _schritt(mandant, 35, f"OpenSlides: Version {alt} → {neu} eintragen")
     original_compose, original_config = compose.read_text(encoding="utf-8"), config.read_text(encoding="utf-8")
-    neues_compose, anzahl = _tag_ersetzen(original_compose, alt, neu)
+    neue_config, anzahl = re.subn(rf"""(?m)^(\s*tag:\s*['"]?){re.escape(alt)}""", rf"\g<1>{neu}", original_config)
     if not anzahl:
-        raise BereitstellungsFehler(f"OpenSlides: Tag {alt} in docker-compose.yml nicht gefunden - nichts geändert.")
-    neue_config = re.sub(rf"""(?m)^(\s*tag:\s*['"]?){re.escape(alt)}""", rf"\g<1>{neu}", original_config)
-    compose.write_text(neues_compose, encoding="utf-8")
+        raise BereitstellungsFehler(f"OpenSlides: Tag {alt} in config.yml nicht gefunden - nichts geändert.")
+    osmanage, vorlage = openslides.werkzeuge_bereitstellen()
     config.write_text(neue_config, encoding="utf-8")
     try:
+        basis.docker([str(osmanage), "config", "--force", "--config", "config.yml", "--template", str(vorlage), "."],
+                     "OpenSlides: Compose-Datei neu erzeugen", timeout=300, cwd=verz, env=umgebung)
+        if dienstversionen.openslides_konfiguriert(mandant) != neu:
+            raise BereitstellungsFehler("OpenSlides: Die neue Compose-Datei enthält die Version "
+                                        f"{neu} nicht - nichts geändert.")
         _schritt(mandant, 50, "OpenSlides: neue Images laden")
         basis.docker(compose_befehl + ["pull"], "OpenSlides: docker compose pull", timeout=1800, cwd=verz,
                      env=umgebung)

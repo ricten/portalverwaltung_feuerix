@@ -1,6 +1,7 @@
 """Gemeinsame Bausteine fuer Bereitstellung von Feuerix und Zusatzdiensten (Paperless, OpenSlides)."""
 import os
 import secrets
+import socket
 import string
 import subprocess
 from pathlib import Path
@@ -32,14 +33,35 @@ def instanz_verzeichnis(mandant, unterordner=None):
     return pfad
 
 
+PORT_FELDER = ("web_port", "paperless_port", "openslides_port", "openslides_manage_port")
+
+
+def port_frei(port):
+    """True, wenn der Port auf diesem Server gerade nicht gebunden ist (egal von wem: andere Instanz, Docker, ein
+    fremdes Programm). Pruefung per Bind-Versuch auf 127.0.0.1."""
+    if not settings.PORT_PRUEFUNG:
+        return True
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
 def naechster_freier_port(feld, basis):
-    """Naechster noch von keiner Instanz belegter Port ab `basis` fuer das Modellfeld `feld`
-    (web_port, paperless_port, openslides_port)."""
+    """Naechster freier Port ab `basis` fuer die Instanz-Eigenschaft `feld`. Frei heisst: von KEINER Instanz in
+    irgendeinem Port-Feld (Web, Paperless, OpenSlides, OpenSlides-Verwaltung) vergeben UND auf dem Server tatsaechlich
+    nicht belegt (auch nicht durch gestoppte-aber-bestehende Docker-Ports oder fremde Programme)."""
     from .models import MandantInstanz
-    belegt = set(MandantInstanz.objects.exclude(**{f"{feld}__isnull": True}).values_list(feld, flat=True))
+    belegt = set()
+    for f in PORT_FELDER:
+        belegt.update(MandantInstanz.objects.exclude(**{f"{f}__isnull": True}).values_list(f, flat=True))
     port = basis
-    while port in belegt:
+    while port in belegt or not port_frei(port):
         port += 1
+        if port > 65000:
+            raise BereitstellungsFehler(f"Kein freier Port ab {basis} gefunden.")
     return port
 
 

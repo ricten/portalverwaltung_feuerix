@@ -14,7 +14,7 @@ Aktuell automatisiert:
 
 - **.env-Generierung** je Mandant (frische Geheimnisse: `SECRET_KEY`, `FIELD_ENCRYPTION_KEY`,
   Postgres-Passwort, Admin-Passwort; verschlüsselt in der Portalverwaltungs-Datenbank gespeichert)
-- **Port-Vergabe** (nächster freier Port ab `WEB_PORT_BASIS`)
+- **Port-Vergabe** (nächster freier Port ab `WEB_PORT_BASIS`; geprüft wird sowohl gegen alle Ports anderer Instanzen als auch per Bind-Versuch, ob der Port auf dem Server wirklich frei ist; OpenSlides bekommt je Instanz zusätzlich einen eigenen Verwaltungsport ab `OPENSLIDES_MANAGE_PORT_BASIS`)
 - **Start des Feuerix-Docker-Compose-Stacks** unter einem eigenen Projektnamen (`mandant-<kürzel>`), direkt
   über die `docker-compose.yml` aus dem lokalen Feuerix-Checkout (`FEUERIX_REPO_PFAD`) – kein Kopieren, damit
   Änderungen daran automatisch für neue Bereitstellungen gelten

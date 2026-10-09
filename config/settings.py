@@ -127,6 +127,10 @@ WEB_PORT_BASIS = int(os.environ.get("WEB_PORT_BASIS", "8100"))
 # Analog fuer die optionalen Zusatzdienste (jeder Mandant bekommt je Dienst einen eigenen freien Port).
 PAPERLESS_PORT_BASIS = int(os.environ.get("PAPERLESS_PORT_BASIS", "10100"))
 OPENSLIDES_PORT_BASIS = int(os.environ.get("OPENSLIDES_PORT_BASIS", "9100"))
+# Vor der Vergabe eines Ports pruefen, ob er auf dem Server wirklich frei ist (Bind-Versuch auf 127.0.0.1).
+PORT_PRUEFUNG = _bool("PORT_PRUEFUNG", "1")
+# Host-Port des OpenSlides-Verwaltungsdienstes (backendManage) je Instanz, ab diesem Wert der naechste freie.
+OPENSLIDES_MANAGE_PORT_BASIS = int(os.environ.get("OPENSLIDES_MANAGE_PORT_BASIS", "9200"))
 # Reverse-Proxy-Automatisierung (Caddy-Admin-API, z. B. http://127.0.0.1:2019). Leer = aus, dann Caddy von
 # Hand pflegen. Die Admin-API gibt vollen Zugriff auf Caddy - deshalb nur auf localhost erreichbar lassen.
 CADDY_ADMIN_URL = os.environ.get("CADDY_ADMIN_URL", "")

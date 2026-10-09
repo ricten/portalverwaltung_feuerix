@@ -1,4 +1,5 @@
 """Tests fuer das Update von Paperless-ngx und OpenSlides aus dem Portal (Docker gemockt)."""
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -55,6 +56,11 @@ class _Umgebung:
         self.befehle.append((befehl, was))
         if self.fehler_bei and self.fehler_bei in was:
             raise BereitstellungsFehler(f"{was} fehlgeschlagen:\nkaputt")
+        if len(befehl) > 1 and befehl[1] == "config":
+            # simuliert `osmanage config --force`: Compose-Datei mit dem Tag der config.yml neu erzeugen
+            tag = re.search(r"tag:\s*(\S+)", (self.os_verz / "config.yml").read_text()).group(1)
+            (self.os_verz / "docker-compose.yml").write_text(re.sub(r"(openslides[^\s]*:)\d+\.\d+\.\d+",
+                                                                   rf"\g<1>{tag}", COMPOSE))
         return self.dump if "pg_dump" in befehl else ""
 
     def patchen(self):
@@ -66,6 +72,8 @@ class _Umgebung:
             patch("apps.mandanten.dienstupdate.paperless._verzeichnis", return_value=self.pfad / "du1" / "paperless"),
             patch("apps.mandanten.dienstupdate.paperless.auf_bereitschaft_warten"),
             patch("apps.mandanten.dienstupdate.openslides.auf_bereitschaft_warten"),
+            patch("apps.mandanten.dienstupdate.openslides.werkzeuge_bereitstellen",
+                  return_value=(Path("osmanage"), Path("vorlage.tmpl"))),
             patch("apps.mandanten.dienstupdate.dienstversionen.paperless_laufend", return_value="2.15.0"),
         ]
 
@@ -102,13 +110,15 @@ class PaperlessUpdateTests(TestCase):
 
 
 class OpenSlidesUpdateTests(TestCase):
-    def test_dump_dann_tag_dann_pull_up(self):
+    def test_dump_dann_config_neu_dann_pull_up(self):
         m, _ = _m(), _zustand()
         env = _Umgebung(self)
         _mit(env, dienstupdate.dienst_aktualisieren, m, "openslides")
         beschreibungen = [was for _, was in env.befehle]
         self.assertEqual(beschreibungen, ["OpenSlides: Datenbank-Dump vor dem Update",
+                                          "OpenSlides: Compose-Datei neu erzeugen",
                                           "OpenSlides: docker compose pull", "OpenSlides: docker compose up"])
+        self.assertIn("--force", env.befehle[1][0])
         compose = (env.os_verz / "docker-compose.yml").read_text()
         self.assertEqual(compose.count(":4.2.1"), 2)
         self.assertIn("postgres:15", compose)                       # Fremd-Images bleiben unberuehrt
@@ -139,18 +149,24 @@ class OpenSlidesUpdateTests(TestCase):
         m.refresh_from_db()
         self.assertEqual(m.openslides_version, "4.2.0")
 
-    def test_hauptversionswechsel_wird_abgelehnt(self):
-        m, _ = _m(), _zustand(openslides_neueste="5.0.0")
-        env = _Umgebung(self)
-        with self.assertRaises(BereitstellungsFehler) as ctx:
-            _mit(env, dienstupdate.dienst_aktualisieren, m, "openslides")
-        self.assertIn("Hauptversion", str(ctx.exception))
-        self.assertEqual(env.befehle, [])
+    def test_nur_patch_updates_minor_und_major_sprung_werden_abgelehnt(self):
+        m = _m()
+        for neueste in ("4.3.0", "5.0.0"):
+            _zustand(openslides_neueste=neueste)
+            env = _Umgebung(self)
+            with self.assertRaises(BereitstellungsFehler) as ctx:
+                _mit(env, dienstupdate.dienst_aktualisieren, m, "openslides")
+            self.assertIn("kein Patch-Update", str(ctx.exception))
+            self.assertEqual(env.befehle, [])           # nicht einmal ein Dump
 
-    def test_tag_ersetzen_trifft_nur_openslides_images(self):
-        neu, anzahl = dienstupdate._tag_ersetzen(COMPOSE + "  x:\n    image: redis:4.2.0\n", "4.2.0", "4.2.1")
-        self.assertEqual(anzahl, 2)
-        self.assertIn("redis:4.2.0", neu)
+    def test_fehlt_die_neue_version_in_der_compose_datei_wird_zurueckgesetzt(self):
+        m, _ = _m(), _zustand()
+        env = _Umgebung(self)
+        with patch("apps.mandanten.dienstupdate.dienstversionen.openslides_konfiguriert", side_effect=["4.2.0", "4.2.0"]):
+            with self.assertRaises(BereitstellungsFehler):
+                _mit(env, dienstupdate.dienst_aktualisieren, m, "openslides")
+        self.assertEqual((env.os_verz / "config.yml").read_text(), CONFIG)
+        self.assertEqual((env.os_verz / "docker-compose.yml").read_text(), COMPOSE)
 
 
 class VoraussetzungenTests(TestCase):
