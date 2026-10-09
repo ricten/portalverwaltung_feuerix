@@ -19,5 +19,25 @@
     });
     if (laufend) setTimeout(pruefen, 3000);
   }
+  // Start/Stopp/Neustart-Knoepfe in der Instanzliste: schicken ein POST mit dem CSRF-Token aus dem Cookie.
+  function cookie(name) {
+    var treffer = document.cookie.match("(?:^|; )" + name + "=([^;]*)");
+    return treffer ? decodeURIComponent(treffer[1]) : "";
+  }
+  document.addEventListener("click", function (e) {
+    var knopf = e.target.closest(".pv-knopf");
+    if (!knopf || knopf.disabled) return;
+    if (knopf.dataset.frage && !window.confirm(knopf.dataset.frage)) return;
+    var form = document.createElement("form");
+    form.method = "post";
+    form.action = knopf.dataset.url;
+    var feld = document.createElement("input");
+    feld.type = "hidden";
+    feld.name = "csrfmiddlewaretoken";
+    feld.value = cookie("csrftoken");
+    form.appendChild(feld);
+    document.body.appendChild(form);
+    form.submit();
+  });
   document.addEventListener("DOMContentLoaded", pruefen);
 })();

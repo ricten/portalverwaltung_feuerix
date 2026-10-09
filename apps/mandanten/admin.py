@@ -1,8 +1,10 @@
 from django import forms
 from django.contrib import admin, messages
-from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from . import betrieb, provisioning, tasks
 from .basis import BereitstellungsFehler
@@ -41,22 +43,57 @@ class MandantForm(forms.ModelForm):
 @admin.register(MandantInstanz)
 class MandantInstanzAdmin(admin.ModelAdmin):
     list_display = ("kuerzel", "verein_name", "domain", "status", "fortschrittsbalken", "erreichbarkeit",
-                    "feuerix_version", "erstellt_am")
+                    "steuerung", "feuerix_version", "erstellt_am")
     list_filter = ("status",)
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                        "protokoll", "feuerix_version", "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "pausieren", "sichern", "aktualisieren", "zugangsdaten_anzeigen",
-               "admin_passwort_zuruecksetzen"]
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "pausieren", "sichern", "aktualisieren",
+               "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
+
+    # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, Symbol, Farbklasse, Rueckfrage)
+    DIENSTE = {
+        "starten": (("gestoppt", "pausiert", "fehlgeschlagen"), tasks.mandant_starten_task, "Starten", "▶",
+                    "pv-start", ""),
+        "stoppen": (("laeuft", "fehlgeschlagen"), tasks.mandant_stoppen_task, "Stoppen", "■", "pv-stopp",
+                    "Instanz wirklich stoppen? Sie ist danach nicht erreichbar."),
+        "neustarten": (("laeuft", "fehlgeschlagen"), tasks.mandant_neustarten_task, "Neustarten", "↻",
+                       "pv-neustart", "Instanz neu starten? Sie ist kurz nicht erreichbar."),
+    }
 
     class Media:
         css = {"all": ("mandanten/fortschritt.css",)}
         js = ("mandanten/fortschritt.js",)
 
     def get_urls(self):
-        eigene = [path("<int:pk>/status/", self.admin_site.admin_view(self.status_json), name="mandanten_status")]
+        eigene = [path("<int:pk>/status/", self.admin_site.admin_view(self.status_json), name="mandanten_status"),
+                  path("<int:pk>/dienst/<str:aktion>/", self.admin_site.admin_view(self.dienst_view),
+                       name="mandanten_dienst")]
         return eigene + super().get_urls()
+
+    def dienst_view(self, request, pk, aktion):
+        """Ziel der Schaltflaechen in der Instanzliste (nur POST, braucht Aenderungsrecht)."""
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        if not self.has_change_permission(request) or aktion not in self.DIENSTE:
+            raise PermissionDenied
+        erlaubt, task, text = self.DIENSTE[aktion][:3]
+        self._steuern(request, MandantInstanz.objects.filter(pk=pk), erlaubt, task, text)
+        return HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
+
+    @admin.display(description="Steuerung")
+    def steuerung(self, obj):
+        if obj.status in ("neu", "geloescht"):
+            return "-"
+        knoepfe = []
+        for aktion, (erlaubt, _task, text, symbol, klasse, frage) in self.DIENSTE.items():
+            knoepfe.append(format_html(
+                '<button type="button" class="pv-knopf {}" data-url="{}" data-frage="{}" title="{}"{}>'
+                '<span aria-hidden="true">{}</span> {}</button>',
+                klasse, reverse("admin:mandanten_dienst", args=[obj.pk, aktion]), frage, text,
+                "" if obj.status in erlaubt else mark_safe(" disabled"), symbol, text))
+        return format_html('<div class="pv-knoepfe">{}</div>', mark_safe("".join(knoepfe)))
 
     def status_json(self, request, pk):
         if not self.has_view_permission(request):
@@ -148,16 +185,15 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     @admin.action(description="Starten (gestoppte/pausierte Instanz)")
     def starten(self, request, queryset):
-        self._steuern(request, queryset, ("gestoppt", "pausiert", "fehlgeschlagen"), tasks.mandant_starten_task,
-                      "Starten")
+        self._steuern(request, queryset, *self.DIENSTE["starten"][:3])
 
     @admin.action(description="Stoppen (Container anhalten, Daten bleiben)")
     def stoppen(self, request, queryset):
-        self._steuern(request, queryset, ("laeuft", "fehlgeschlagen"), tasks.mandant_stoppen_task, "Stoppen")
+        self._steuern(request, queryset, *self.DIENSTE["stoppen"][:3])
 
     @admin.action(description="Neustarten")
     def neustarten(self, request, queryset):
-        self._steuern(request, queryset, ("laeuft", "fehlgeschlagen"), tasks.mandant_neustarten_task, "Neustarten")
+        self._steuern(request, queryset, *self.DIENSTE["neustarten"][:3])
 
     @admin.action(description="Pausieren (Daten bleiben erhalten)")
     def pausieren(self, request, queryset):

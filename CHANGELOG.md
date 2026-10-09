@@ -4,6 +4,10 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.12.0 (2026-10-09)
+- Neu: In jeder Zeile der Instanzliste gibt es die Schaltflächen **▶ Starten**, **■ Stoppen** und **↻ Neustarten**
+  (je nach Status aktiv oder ausgegraut; Stoppen/Neustarten fragen vorher nach). Die Sammel-Aktionen bleiben.
+
 ## 0.11.0 (2026-10-09)
 - Neu: **Wartungsseite**. Hat eine Instanz eine Domain, aber keinen laufenden Dienst (neu angelegt, gestoppt,
   pausiert, fehlgeschlagen oder in Bereitstellung), liefert der Reverse Proxy statt eines Browserfehlers eine

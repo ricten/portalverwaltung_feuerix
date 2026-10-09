@@ -56,7 +56,8 @@ Aktuell automatisiert:
     aus dem Reverse Proxy und kommen beim Starten wieder hinein)
   - Django-Admin: Aktionen „Bereitstellen“, „Starten“, „Stoppen“, „Neustarten“, „Pausieren“, „Sichern“,
     „Aktualisieren“ (laufen über Celery). **Stoppen** hält die Container nur an (Status „Gestoppt“), **Pausieren**
-    baut sie ab (Status „Pausiert“, Daten bleiben); **Starten** geht aus beiden Zuständen.
+    baut sie ab (Status „Pausiert“, Daten bleiben); **Starten** geht aus beiden Zuständen. Start, Stopp und Neustart gibt es zusätzlich als Schaltflächen direkt
+    in der Zeile jeder Instanz (nicht passende sind ausgegraut).
 
 **Bewusst nicht enthalten**: Abrechnung/Tarife, Self-Service-Anmeldung für Vereine, automatische
 Zertifikats-/Backup-Rotation über 14 Sicherungen hinaus (das übernimmt Feuerix' `backup.sh` je Instanz).

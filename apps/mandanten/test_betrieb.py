@@ -326,3 +326,34 @@ class NachinstallationTests(TestCase):
         self.assertEqual(antwort.status_code, 302)
         self.assertEqual(MandantInstanz.objects.get(kuerzel="neu").openslides_domain, "openslides.neu.example.org")
         delay.assert_not_called()   # Bereitstellung startet der Admin bewusst per Aktion
+
+
+class ZeilenknoepfeTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_superuser("zk", "z@example.org", "pw"))
+
+    def test_liste_zeigt_drei_knoepfe_mit_passendem_zustand(self):
+        _m("k1", status="laeuft")
+        _m("k2", status="gestoppt")
+        antwort = self.client.get("/admin/mandanten/mandantinstanz/")
+        self.assertContains(antwort, "pv-knopf pv-start", count=2)
+        self.assertContains(antwort, "pv-knopf pv-stopp", count=2)
+        self.assertContains(antwort, "pv-knopf pv-neustart", count=2)
+        # laeuft: Start gesperrt; gestoppt: Stopp und Neustart gesperrt
+        self.assertEqual(antwort.content.decode().count('pv-knopf pv-start" data-url') , 2)
+        self.assertEqual(antwort.content.decode().count(" disabled>"), 3)
+
+    def test_knopf_loest_task_aus_nur_per_post(self):
+        m = _m("k3", status="laeuft")
+        url = f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/neustarten/"
+        self.assertEqual(self.client.get(url).status_code, 405)
+        with patch("apps.mandanten.tasks.mandant_neustarten_task.delay") as delay:
+            antwort = self.client.post(url)
+        self.assertEqual(antwort.status_code, 302)
+        delay.assert_called_once_with(m.pk)
+
+    def test_unbekannte_aktion_und_fehlende_rechte(self):
+        m = _m("k4", status="laeuft")
+        self.assertEqual(self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/loeschen/").status_code, 403)
+        self.client.force_login(get_user_model().objects.create_user("ro", is_staff=True))
+        self.assertEqual(self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/stoppen/").status_code, 403)
