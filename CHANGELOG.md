@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.11.0 (2026-10-09)
+- Neu: **Wartungsseite**. Hat eine Instanz eine Domain, aber keinen laufenden Dienst (neu angelegt, gestoppt,
+  pausiert, fehlgeschlagen oder in Bereitstellung), liefert der Reverse Proxy statt eines Browserfehlers eine
+  Seite „Wartungsarbeiten“ (HTTP 503, `Retry-After`). Dasselbe gilt für Paperless/OpenSlides der Instanz und,
+  wenn ein „laufender“ Dienst unerwartet ausfällt (Upstream 502/503/504). Der Proxy wird dafür auch beim
+  Speichern einer Instanz und nach Fehlschlägen aktualisiert.
+
 ## 0.10.1 (2026-10-09)
 - Die Hilfetexte der Felder „Paperless-Domain“ und „OpenSlides-Domain“ sagen jetzt klar, dass sie nur für eine
   eigene Adresse bzw. einen abweichenden Namen auszufüllen sind - bei Installation über den Haken bleiben sie leer.

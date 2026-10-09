@@ -225,6 +225,14 @@ def _proxy_nachziehen(mandant):
         raise BereitstellungsFehler(f"Reverse Proxy: {e}")
 
 
+def proxy_nachziehen_best_effort(mandant):
+    """Fuer Fehlerpfade/Speichern: Proxy aktualisieren (Wartungsseite), ohne einen Fehler zu verdecken."""
+    try:
+        proxy.proxy_aktualisieren()
+    except proxy.ProxyFehler as e:
+        mandant.protokollieren(f"Reverse Proxy konnte nicht aktualisiert werden: {e}")
+
+
 def feuerix_version():
     try:
         return (Path(settings.FEUERIX_REPO_PFAD) / "VERSION").read_text(encoding="utf-8").strip()[:20]
@@ -258,6 +266,7 @@ def bereitstellen(mandant):
         mandant.schritt = f"Fehlgeschlagen bei: {mandant.schritt}"[:200]
         mandant.save(update_fields=["status", "schritt"])
         mandant.protokollieren(f"Fehler: {e}")
+        proxy_nachziehen_best_effort(mandant)
         raise
 
 

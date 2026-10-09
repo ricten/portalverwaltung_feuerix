@@ -108,6 +108,7 @@ def _hochfahren(mandant, aktion, text):
         mandant.schritt = f"Fehlgeschlagen bei: {mandant.schritt}"[:200]
         mandant.save(update_fields=["status", "schritt"])
         mandant.protokollieren(f"Fehler: {e}")
+        provisioning.proxy_nachziehen_best_effort(mandant)
         raise
 
 

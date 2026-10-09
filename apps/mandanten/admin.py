@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from . import betrieb, tasks
+from . import betrieb, provisioning, tasks
 from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
@@ -101,6 +101,9 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         alt = MandantInstanz.objects.filter(pk=obj.pk).first() if change else None
         super().save_model(request, obj, form, change)
+        if obj.status != "laeuft":
+            # Domain sofort mit Wartungsseite belegen (statt Zertifikats-/Verbindungsfehler im Browser)
+            provisioning.proxy_nachziehen_best_effort(obj)
         neu = alt is not None and obj.status == "laeuft" and (
             (obj.paperless_domain and not alt.paperless_domain)
             or (obj.openslides_domain and not alt.openslides_domain))

@@ -225,3 +225,49 @@ class AbbauenTests(TestCase):
         self.assertIn("pausiert", out.getvalue())
         with self.assertRaises(CommandError):
             call_command("mandant_abbauen", "gibt-es-nicht")
+
+
+class WartungsseiteTests(TestCase):
+    def _m(self, kuerzel, port, status, **kw):
+        return MandantInstanz.objects.create(kuerzel=kuerzel, verein_name=kuerzel.upper(), status=status,
+                                             domain=f"{kuerzel}.example.org", web_port=port, **kw)
+
+    def test_seite_ist_fuer_caddy_geeignet(self):
+        self.assertNotIn("`", proxy.WARTUNGSSEITE)
+        self.assertNotIn("{", proxy.WARTUNGSSEITE)
+        self.assertNotIn("\n", proxy.WARTUNGSSEITE)
+
+    def test_gestoppte_instanz_zeigt_wartungsseite_mit_503(self):
+        self._m("a", 8100, "gestoppt", paperless_domain="p.a.example.org", paperless_port=10100)
+        text = proxy.caddyfile_erzeugen(MandantInstanz.objects.filter(status__in=proxy.WARTUNGS_STATUS))
+        block = text.split("a.example.org {")[1].split("}")[0]
+        self.assertIn("respond `", block)
+        self.assertIn("` 503", block)
+        self.assertNotIn("reverse_proxy", block)
+        self.assertIn("p.a.example.org {", text)   # auch Zusatzdienste
+        self.assertNotIn("reverse_proxy 127.0.0.1:10100", text)
+
+    def test_laufende_instanz_wird_durchgereicht_und_faengt_ausfaelle_ab(self):
+        self._m("b", 8101, "laeuft")
+        text = proxy.caddyfile_erzeugen(MandantInstanz.objects.all())
+        self.assertIn("(ausfall) {", text)
+        self.assertIn("import ausfall", text)
+        self.assertIn("reverse_proxy 127.0.0.1:8101", text)
+        self.assertIn("http.error.status_code} in [502, 503, 504]", text)
+
+    def test_geloeschte_instanzen_bekommen_keine_eintraege_neue_schon(self):
+        self._m("n", None, "neu")
+        self._m("g", 8102, "geloescht")
+        with patch("apps.mandanten.proxy.urllib.request.urlopen") as op, \
+             override_settings(CADDY_ADMIN_URL="http://127.0.0.1:2019"):
+            proxy.proxy_aktualisieren()
+        daten = op.call_args.args[0].data.decode()
+        self.assertIn("n.example.org {", daten)
+        self.assertNotIn("g.example.org", daten)
+
+    def test_proxy_aktualisieren_nimmt_wartungs_instanzen_mit(self):
+        self._m("p", 8103, "pausiert")
+        with patch("apps.mandanten.proxy.urllib.request.urlopen") as op, \
+             override_settings(CADDY_ADMIN_URL="http://127.0.0.1:2019"):
+            proxy.proxy_aktualisieren()
+        self.assertIn("p.example.org {", op.call_args.args[0].data.decode())

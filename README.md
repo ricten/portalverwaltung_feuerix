@@ -82,6 +82,11 @@ Aktionen **„Zugangsdaten des Instanz-Administrators anzeigen“** (nur Superus
 **„Admin-Passwort der Instanz zurücksetzen“** (neues Passwort wird einmalig angezeigt). Die Startseite `/` leitet
 auf `/admin/` um.
 
+**Wartungsseite:** Hat eine Instanz eine Domain, aber keinen laufenden Dienst (neu angelegt, gestoppt, pausiert,
+fehlgeschlagen, in Bereitstellung) – oder fällt ein laufender Dienst aus –, zeigt Caddy unter dieser Domain (auch
+bei Paperless/OpenSlides) die Seite „Wartungsarbeiten“ mit HTTP 503 statt eines Browserfehlers. Voraussetzung:
+Reverse-Proxy-Automatisierung (`CADDY_ADMIN_URL`) und DNS der Domain auf den Server.
+
 ## Ablauf
 
 ```bash
