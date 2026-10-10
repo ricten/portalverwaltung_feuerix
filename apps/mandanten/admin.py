@@ -50,7 +50,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        "protokoll", "feuerix_version", "paperless_version", "openslides_version",
                        "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "sichern", "aktualisieren",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
@@ -77,6 +77,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        name="mandanten_update_pruefen"),
                   path("update/ausrollen/", self.admin_site.admin_view(self.update_ausrollen_view),
                        name="mandanten_update_ausrollen"),
+                  path("update/sperre-aufheben/", self.admin_site.admin_view(self.update_sperre_view),
+                       name="mandanten_update_sperre"),
                   path("update/status/", self.admin_site.admin_view(self.update_status_view),
                        name="mandanten_update_status"),
                   path("<int:pk>/dienst/<str:aktion>/", self.admin_site.admin_view(self.dienst_view),
@@ -234,6 +236,24 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             gesamtlog.log("Rollout per Klick gestartet.", kategorie="Update", benutzer=request.user.get_username())
             tasks.update_ausrollen_task.delay()
             self.message_user(request, "Rollout gestartet - Fortschritt siehe Hinweis oben.", messages.INFO)
+        return self._zurueck(request)
+
+    def update_sperre_view(self, request):
+        """Hebt die Sperre eines Rollouts auf, der nicht mehr laeuft (Worker wurde waehrenddessen beendet)."""
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        if not (self.has_change_permission(request) and request.user.is_superuser):
+            raise PermissionDenied
+        zustand = UpdateZustand.holen()
+        if not zustand.rollout_verdaechtig:
+            self.message_user(request, "Es besteht keine verdächtige Rollout-Sperre.", messages.WARNING)
+        elif betrieb.aktiver_rollout():
+            self.message_user(request, "Der Worker führt noch einen Rollout aus - Sperre bleibt.", messages.WARNING)
+        else:
+            UpdateZustand.objects.filter(pk=1).update(rollout_laeuft=False, rollout_text="",
+                                                      rollout_ergebnis="Abgebrochen (Sperre von Hand aufgehoben).")
+            gesamtlog.log("Rollout-Sperre aufgehoben.", kategorie="Update", benutzer=request.user.get_username())
+            self.message_user(request, "Rollout-Sperre aufgehoben.", messages.SUCCESS)
         return self._zurueck(request)
 
     def update_status_view(self, request):
@@ -458,6 +478,21 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         if gestartet:
             self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
+
+    @admin.action(description="Hängende Instanz zurücksetzen („In Arbeit“ beenden)")
+    def haengende_zuruecksetzen(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(request, "Nur Superuser dürfen den Status zurücksetzen.", messages.ERROR)
+            return
+        for m in queryset:
+            try:
+                neu = betrieb.haengende_zuruecksetzen(m)
+            except BereitstellungsFehler as e:
+                self.message_user(request, f"{m.kuerzel}: {e}", messages.WARNING)
+                continue
+            self._log(request, m, f"Hängenden Vorgang zurückgesetzt - Status jetzt „{m.get_status_display()}“")
+            self.message_user(request, f"{m.kuerzel}: zurückgesetzt, tatsächlicher Zustand: {m.get_status_display()}.",
+                              messages.SUCCESS if neu == "laeuft" else messages.INFO)
 
     @admin.action(description="Aus Sicherung wiederherstellen ...")
     def wiederherstellen(self, request, queryset):

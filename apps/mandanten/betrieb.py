@@ -1,5 +1,7 @@
 """Betrieb laufender Mandanten-Instanzen: Sicherung, Gesundheitspruefung und Update-Rollout."""
+import hashlib
 import time
+from datetime import timedelta
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -7,7 +9,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless, provisioning
+from . import fields, backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
 from .models import BackupZiel, MandantInstanz
 
@@ -36,6 +38,26 @@ def backup(mandant, _pruefen=True):
             "backup", f"Sicherung von {mandant.kuerzel} fehlgeschlagen",
             f"Die Sicherung der Instanz {mandant.verein_name} ({mandant.kuerzel}) ist fehlgeschlagen:\n\n{str(e)[:1500]}")
         raise
+
+
+def _env_mitsichern(mandant, ordner):
+    """Legt die .env der Instanz (mit FIELD_ENCRYPTION_KEY, SECRET_KEY, Passwoertern) VERSCHLUESSELT als `env-<hash>.enc` zur
+    Sicherung: Ohne die .env sind die verschluesselten Felder einer Sicherung auf einem neuen Server nicht lesbar. Verschluesselt
+    wird mit dem FIELD_ENCRYPTION_KEY der Portalverwaltung, damit Sicherung und Schluessel nicht im Klartext beieinander liegen
+    (Entschluesseln: `manage.py env_entschluesseln <datei>`). Gleicher Inhalt = gleicher Dateiname, es entstehen keine Duplikate."""
+    quelle = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel / ".env"
+    if not quelle.is_file():
+        mandant.protokollieren("Hinweis: Keine .env gefunden - nicht mitgesichert.")
+        return
+    inhalt = quelle.read_bytes()
+    datei = Path(ordner) / f"env-{hashlib.sha256(inhalt).hexdigest()[:12]}.enc"
+    if not datei.exists():
+        datei.write_bytes(fields.verschluesseln(inhalt))
+        try:
+            datei.chmod(0o600)
+        except OSError:
+            pass
+        mandant.protokollieren(f".env verschlüsselt mitgesichert ({datei.name}).")
 
 
 def vollsicherung(mandant):
@@ -77,6 +99,7 @@ def _backup(mandant):
     ziel = basis.instanz_verzeichnis(mandant, "backups")
     basis.docker(compose + ["cp", "web:/data/backups/.", str(ziel)], "Sicherung herauskopieren", timeout=3600)
     mandant.protokollieren(f"Sicherung erstellt und nach {ziel} kopiert.")
+    _env_mitsichern(mandant, ziel)
     if not backupziel.aktuell():
         eingerichtet = BackupZiel.objects.filter(pk=1).exclude(server="").first()
         if eingerichtet:
@@ -307,4 +330,74 @@ def admin_passwort_zuruecksetzen(mandant):
     mandant.admin_passwort = neu
     mandant.save(update_fields=["admin_passwort"])
     mandant.protokollieren("Passwort des Instanz-Administrators zurückgesetzt.")
+    return neu
+
+
+# ---------------------------------------------------------------------------------------- haengende Instanzen
+HAENGT_MINUTEN = 15
+
+
+def aktiver_auftrag(mandant_id):
+    """True/False, ob der Celery-Worker gerade einen Auftrag fuer diese Instanz ausfuehrt; None, wenn das nicht zu
+    ermitteln ist (z. B. Worker/Broker nicht erreichbar - dann laeuft auch kein Auftrag)."""
+    try:
+        from config.celery import app
+        aktiv = app.control.inspect(timeout=1.0).active()
+    except Exception:
+        return None
+    if aktiv is None:
+        return None
+    for auftraege in aktiv.values():
+        for a in auftraege:
+            args = a.get("args") or []
+            if args and str(args[0]) == str(mandant_id):
+                return True
+    return False
+
+
+def aktiver_rollout():
+    """True/False/None: fuehrt der Worker gerade den Rollout-Auftrag aus?"""
+    try:
+        from config.celery import app
+        aktiv = app.control.inspect(timeout=1.0).active()
+    except Exception:
+        return None
+    if aktiv is None:
+        return None
+    return any(a.get("name", "").endswith("update_ausrollen_task") for auftraege in aktiv.values() for a in auftraege)
+
+
+def tatsaechlicher_status(mandant):
+    """Ermittelt anhand von Docker, in welchem Zustand die Instanz wirklich ist (laeuft/gestoppt/fehlgeschlagen/pausiert/neu)."""
+    try:
+        compose = provisioning._compose_basis(mandant)
+    except BereitstellungsFehler:
+        return "neu"                                 # keine .env: nie bereitgestellt
+    laufend = basis.docker(compose + ["ps", "--status", "running", "-q"], "Container prüfen", timeout=60).split()
+    vorhanden = basis.docker(compose + ["ps", "-a", "-q"], "Container prüfen", timeout=60).split()
+    if laufend:
+        return "laeuft" if gesundheit(mandant, timeout=5).get("feuerix") else "fehlgeschlagen"
+    if vorhanden:
+        return "gestoppt"
+    return "pausiert" if mandant.feuerix_version else "neu"
+
+
+def haengende_zuruecksetzen(mandant, minuten=HAENGT_MINUTEN):
+    """Beendet einen verwaisten Zustand "In Arbeit" (z. B. weil der Worker waehrenddessen neu gestartet wurde): ermittelt den
+    echten Zustand und setzt den Status entsprechend. Verweigert das, solange der Vorgang noch aktiv aussieht. -> neuer Status."""
+    if mandant.status != "wird_bereitgestellt":
+        raise BereitstellungsFehler(f"Die Instanz ist nicht „In Arbeit“ (Status: {mandant.status}).")
+    alter = timezone.now() - mandant.aktualisiert_am
+    if alter < timedelta(minutes=minuten):
+        raise BereitstellungsFehler(f"Letzte Aktivität vor {int(alter.total_seconds() // 60)} Minuten - der Vorgang läuft "
+                                    f"vermutlich noch. Bitte frühestens nach {minuten} Minuten ohne Fortschritt zurücksetzen.")
+    if aktiver_auftrag(mandant.pk):
+        raise BereitstellungsFehler("Der Worker führt für diese Instanz noch einen Auftrag aus - nicht zurückgesetzt.")
+    neu = tatsaechlicher_status(mandant)
+    schritt = mandant.schritt
+    mandant.status, mandant.fortschritt, mandant.schritt = neu, 0, ""
+    mandant.save(update_fields=["status", "fortschritt", "schritt"])
+    mandant.protokollieren(f"Status „In Arbeit“ (zuletzt: {schritt or '-'}) zurückgesetzt: tatsächlicher Zustand ist "
+                           f"„{mandant.get_status_display()}“.")
+    provisioning.proxy_nachziehen_best_effort(mandant)
     return neu

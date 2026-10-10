@@ -93,7 +93,7 @@ sudo systemctl restart portal-web portal-worker
 ```
 
 Starte die Dienste nicht neu, solange der Admin eine Instanz „In Arbeit“ zeigt: Der Worker bricht dabei laufende Aufträge ab
-(siehe Fehlerbehebung).
+(der Status lässt sich danach mit „Hängende Instanz zurücksetzen“ bereinigen, siehe Fehlerbehebung).
 
 **Feuerix für die Vereins-Instanzen:** Das Portal prüft selbst, ob es eine neuere Feuerix-Version gibt, und zeigt auf der
 Startseite einen Hinweis. Mit **Update jetzt ausrollen** wird der Code gezogen (`git pull`) und alle laufenden Instanzen werden
@@ -151,7 +151,10 @@ etwas hochgeladen wurde.
 Unterstützt wird SMB/CIFS (Windows-Freigabe, NAS, Samba), kein NFS. Das Portal schreibt direkt per SMB (nichts wird gemountet, kein Root
 nötig, Port 445 muss erreichbar sein); der Benutzer braucht Schreibrechte auf die Freigabe. Je Instanz entsteht ein Ordner mit dem Kürzel
 unter dem eingestellten Unterordner: `…\<kürzel>\` (Feuerix-Sicherungen), `…\<kürzel>\openslides\` (Dumps), `…\<kürzel>\paperless\`
-(Export). Die Aktion **Sichern** legt alle drei an. Nach einem `git pull` einmal `pip install -r requirements.txt` und `migrate`.
+(Export). Die Aktion **Sichern** legt alle drei an. Mit jeder Sicherung liegt außerdem die **`.env`** der Instanz als verschlüsselte
+`env-….enc` im Ordner `…\<kürzel>\` (so auch bei der letzten Sicherung vor dem endgültigen Löschen); sie enthält den `FIELD_ENCRYPTION_KEY`, ohne den
+die Sicherung auf einem neuen Server nicht vollständig lesbar wäre. Entschlüsseln: `./venv/bin/python manage.py env_entschluesseln <datei> --ausgabe .env`
+(braucht den `FIELD_ENCRYPTION_KEY` der Portalverwaltung). Nach einem `git pull` einmal `pip install -r requirements.txt` und `migrate`.
 
 ## E-Mail-Benachrichtigung
 
@@ -191,7 +194,7 @@ nicht ankommt: unter „Status“ steht der letzte Versandfehler.
 | „Update abgebrochen: Sicherung … fehlgeschlagen“ | Das Portal sichert vor dem Update auch Paperless und OpenSlides; deren Container müssen laufen. Den Grund nennt das Protokoll der Instanz. Starten bzw. reparieren, dann das Update wiederholen |
 | Paperless-Version „nicht ermittelt“ | Der Paperless-Container der Instanz läuft nicht oder antwortet nicht auf `docker compose exec`. Der Update-Hinweis nennt den Grund; nach dem Beheben „Erneut prüfen“ |
 | OpenSlides-Sicherung/-Update schlägt fehl | Das Portal erwartet im OpenSlides-Stack den Dienst `postgres` mit Benutzer und Datenbank `openslides` (Standard der Vorlage). Weicht deine Konfiguration ab, bitte von Hand sichern |
-| Instanz bleibt auf „In Arbeit“ stehen | Meist wurde der Worker währenddessen neu gestartet oder abgebrochen. Erst prüfen, was wirklich läuft (`docker ps`, Protokoll der Instanz). Dann den Status zurücksetzen: `./venv/bin/python manage.py shell -c "from apps.mandanten.models import MandantInstanz as M; M.objects.filter(kuerzel='<kürzel>').update(status='laeuft', fortschritt=0, schritt='')"` (statt `laeuft` ggf. `gestoppt`) |
+| Instanz bleibt auf „In Arbeit“ stehen | Meist wurde der Worker währenddessen neu gestartet oder abgebrochen. Instanz markieren → Aktion **Hängende Instanz zurücksetzen („In Arbeit“ beenden)**: Das Portal prüft über Docker, was wirklich läuft, und setzt den Status. Es verweigert das, solange der Vorgang noch aktiv aussieht (weniger als 15 Minuten ohne Fortschritt oder Auftrag beim Worker aktiv). Bei einem hängenden **Rollout** erscheint im Update-Hinweis nach 15 Minuten der Knopf „Sperre aufheben“ |
 
 Dienste prüfen: `systemctl status portal-web portal-worker`, Logs: `journalctl -u portal-worker -e`.
 Status aller Instanzen: `./venv/bin/python manage.py mandant_status`. Alle Ereignisse mit Zeit und Benutzer: Admin › **Gesamtlog**.

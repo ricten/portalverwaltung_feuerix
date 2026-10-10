@@ -125,11 +125,11 @@ def vormerken(mandant, text):
     """Setzt die Instanz sofort auf "In Arbeit" (Balken im Admin) und merkt sich den bisherigen Status."""
     vorher = status_vor_vormerkung(mandant)
     mandant.status, mandant.fortschritt, mandant.schritt = "wird_bereitgestellt", 0, f"{text} (vorher: {vorher})"
-    mandant.save(update_fields=["status", "fortschritt", "schritt"])
+    mandant.save(update_fields=["status", "fortschritt", "schritt", "aktualisiert_am"])
 
 
 def fortschritt(mandant, prozent, schritt):
     """Meldet den Bereitstellungsfortschritt (fuer den Fortschrittsbalken im Admin)."""
     mandant.fortschritt = prozent
     mandant.schritt = schritt
-    mandant.save(update_fields=["fortschritt", "schritt"])
+    mandant.save(update_fields=["fortschritt", "schritt", "aktualisiert_am"])

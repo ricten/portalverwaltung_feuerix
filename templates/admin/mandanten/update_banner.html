@@ -4,6 +4,11 @@
   {% if update.rollout_laeuft %}
     <strong>Update wird ausgerollt …</strong>
     <span class="pv-update-text">{{ update.rollout_text|default:"Vorbereitung" }}</span>
+    {% if update.rollout_verdaechtig %}
+      <form method="post" action="{% url 'admin:mandanten_update_sperre' %}" onsubmit="return confirm('Nur aufheben, wenn der Rollout wirklich nicht mehr läuft (z. B. der Worker wurde neu gestartet). Fortfahren?');">{% csrf_token %}
+        <button class="pv-update-knopf" type="submit">Hängt der Rollout? Sperre aufheben</button>
+      </form>
+    {% endif %}
   {% elif update.fehler %}
     <strong>Update-Prüfung fehlgeschlagen.</strong> <span>{{ update.fehler|truncatechars:300 }}</span>
     <form method="post" action="{% url 'admin:mandanten_update_pruefen' %}">{% csrf_token %}<button class="pv-update-knopf" type="submit">Erneut prüfen</button></form>

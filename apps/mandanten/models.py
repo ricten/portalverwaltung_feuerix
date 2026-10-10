@@ -243,6 +243,13 @@ class UpdateZustand(models.Model):
         return ergebnis
 
     @property
+    def rollout_verdaechtig(self):
+        """Ein Rollout gilt seit mehr als HAENGT_MINUTEN als laufend - moeglicherweise wurde der Worker dabei beendet."""
+        from datetime import timedelta
+        return bool(self.rollout_laeuft and self.rollout_gestartet_am
+                    and timezone.now() - self.rollout_gestartet_am > timedelta(minutes=15))
+
+    @property
     def in_arbeit_instanzen(self):
         """Instanzen, die gerade starten, stoppen, aktualisiert oder bereitgestellt werden - solange sind Updates
         nicht moeglich und der Update-Status nicht verlaesslich."""

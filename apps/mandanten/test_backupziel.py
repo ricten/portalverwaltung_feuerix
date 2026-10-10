@@ -196,7 +196,8 @@ class BackupIntegrationTests(TestCase):
         _ziel()
         fake = FakeSMB()
         m = self._backup(fake)
-        self.assertEqual(len(fake.dateien), 1)
+        self.assertEqual(len(fake.dateien), 2)                                     # Datenbank-Sicherung + verschluesselte .env
+        self.assertEqual(sum(1 for n in fake.dateien if "\env-" in n and n.endswith(".enc")), 1)
         self.assertIsNotNone(m.sicherung_am)
         self.assertTrue(m.sicherung_aktuell)
         self.assertIn("Netzwerkfreigabe abgelegt", m.protokoll)

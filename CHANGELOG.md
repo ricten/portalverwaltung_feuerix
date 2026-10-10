@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.28.0 (2026-10-10)
+- Neu: **Die `.env` der Instanz wird mit jeder Sicherung mitgesichert** - auch mit der letzten Sicherung vor dem endgültigen Löschen - und
+  liegt dann bei bestehendem Backup-Ziel auf der Netzwerkfreigabe (`<kürzel>\env-<hash>.enc`). Sie enthält den `FIELD_ENCRYPTION_KEY`,
+  ohne den die verschlüsselten Felder einer Sicherung auf einem neuen Server unlesbar wären. Damit Sicherung und Schlüssel nicht im
+  Klartext nebeneinander liegen, ist sie **verschlüsselt** (mit dem `FIELD_ENCRYPTION_KEY` der Portalverwaltung, den du ohnehin sichern
+  musst); gleicher Inhalt ergibt denselben Dateinamen, es entstehen keine Duplikate. Entschlüsseln:
+  `manage.py env_entschluesseln <datei> [--ausgabe .env]`.
+- Neu: **Hängende Instanzen zurücksetzen** (Admin-Aktion „Hängende Instanz zurücksetzen („In Arbeit“ beenden)“, nur Superuser): Bleibt eine
+  Instanz auf „In Arbeit“ stehen, z. B. weil der Worker währenddessen neu gestartet wurde, ermittelt das Portal anhand von Docker den
+  echten Zustand (Läuft / Fehlgeschlagen / Gestoppt / Stillgelegt / Neu) und setzt den Status. Es verweigert das, solange der Vorgang
+  noch aktiv aussieht (letzte Aktivität jünger als 15 Minuten oder Auftrag beim Worker aktiv). Der Fortschritt hält dafür den
+  Aktivitätszeitpunkt aktuell. Dasselbe für einen verwaisten **Rollout**: Im Update-Hinweis erscheint nach 15 Minuten ein Knopf
+  „Sperre aufheben“ (nur wenn der Worker keinen Rollout mehr ausführt).
+
 ## 0.27.0 (2026-10-10)
 - Neu: **Wiederherstellung auch für OpenSlides und Paperless-ngx** (Seite „Aus Sicherung wiederherstellen“, je Dienst ein eigener Abschnitt,
   Kürzel-Bestätigung, voreingestellte Sicherung des jetzigen Stands). Feuerix und die jeweils anderen Dienste bleiben unberührt.

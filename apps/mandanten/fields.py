@@ -10,6 +10,19 @@ def _fernet():
     return Fernet(settings.FIELD_ENCRYPTION_KEY.encode())
 
 
+def verschluesseln(daten: bytes) -> bytes:
+    """Verschluesselt Bytes mit dem FIELD_ENCRYPTION_KEY der Portalverwaltung (z. B. die .env einer Instanz)."""
+    return _fernet().encrypt(daten)
+
+
+def entschluesseln(daten: bytes) -> bytes:
+    try:
+        return _fernet().decrypt(daten)
+    except InvalidToken:
+        raise ImproperlyConfigured("Datei kann nicht entschluesselt werden - falscher FIELD_ENCRYPTION_KEY oder keine "
+                                   "verschluesselte Sicherung der Portalverwaltung?")
+
+
 class VerschluesseltesTextField(models.TextField):
     """Speichert Text symmetrisch verschluesselt (Fernet) in der Datenbank - fuer die Geheimnisse
     (SECRET_KEY/FIELD_ENCRYPTION_KEY/Passwoerter) jeder verwalteten Mandanten-Instanz."""

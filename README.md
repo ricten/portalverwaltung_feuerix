@@ -51,6 +51,9 @@ Verein gesperrten) Mandantenfähigkeit.
   (Status „Stillgelegt“); **Starten** geht aus „Gestoppt“ und „Stillgelegt“.
 - **Zugangsdaten anzeigen** (Superuser; zeigt das Startpasswort) und **Admin-Passwort der Instanz zurücksetzen**.
 - **Instanz endgültig löschen** mit Abschlusssicherung (siehe unten).
+- **Hängende Instanz zurücksetzen**: Bleibt eine Instanz auf „In Arbeit“ stehen (z. B. Worker währenddessen neu gestartet), ermittelt das Portal den
+  echten Zustand über Docker und setzt den Status – nur, wenn der Vorgang nicht mehr aktiv aussieht (15 Minuten ohne Fortschritt, kein
+  Auftrag beim Worker). Ein verwaister Rollout lässt sich im Update-Hinweis mit „Sperre aufheben“ freigeben.
 - Jede länger laufende Aktion zeigt einen **Fortschrittsbalken mit aktuellem Schritt** (aktualisiert sich ohne Neuladen);
   scheitert ein Schritt, nennt der Balken, wo es hing.
 
@@ -128,6 +131,7 @@ Alles Wichtige geht im Admin; für Skripte, Cron und Notfälle gibt es `./venv/b
 | `mandant_status` | Status und Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring) |
 | `mandant_online_check [--streng]` | Online-Check: Instanzen und Backup-Ziel prüfen und den Zustand speichern |
 | `mandant_dienst <kürzel> stop\|start\|restart` | Instanz samt Paperless/OpenSlides anhalten, starten, neu starten |
+| `env_entschluesseln <datei> [--ausgabe .env]` | die mit der Sicherung abgelegte, verschlüsselte `.env` wieder lesbar machen |
 | `mandant_backup [kürzel]` | vollständige Sicherung (Feuerix, Paperless-Export, OpenSlides-Dump) |
 | `mandant_update_pruefen [--ausrollen]` | auf ein neues Feuerix prüfen, auf Wunsch sofort ausrollen (mit Sicherung vorab) |
 | `mandant_update [--git-pull] [--pause N]` | Feuerix-Code gestaffelt auf alle laufenden Instanzen ausrollen (ohne Sicherungsprüfung) |
@@ -161,6 +165,11 @@ jetzige Stand gesichert; die anderen Dienste der Instanz bleiben unberührt):
   einspielen; die Feuerix-Anbindung bekommt danach einen neuen Token. Angeboten werden der letzte Export und die Exporte
   `_vorher-…` vom Stand vor einer Wiederherstellung (Paperless überschreibt den Ordner `export` bei jedem Export).
 - Bricht es ab, nachdem die Datenbank geleert wurde, nennt das Protokoll, wo der Stand davor liegt.
+
+**`.env` der Instanz**: Jede Sicherung legt die `.env` (mit `FIELD_ENCRYPTION_KEY`, ohne den die verschlüsselten Felder einer Sicherung
+auf einem neuen Server unlesbar wären) **verschlüsselt** als `env-<hash>.enc` mit ab – lokal und auf der Freigabe, also auch in der letzten
+Sicherung vor dem endgültigen Löschen. Verschlüsselt wird mit dem `FIELD_ENCRYPTION_KEY` der Portalverwaltung (den du ohnehin sichern musst);
+Entschlüsseln: `./venv/bin/python manage.py env_entschluesseln <datei> [--ausgabe .env]`.
 
 **Endgültig löschen** (Admin-Aktion „Instanz ENDGÜLTIG löschen …“ bzw. `mandant_abbauen --daten-loeschen`): Das Portal startet die
 Instanz bei Bedarf und legt eine **Abschlusssicherung aller Dienste** an. **Schlägt sie fehl, wird nichts gelöscht.** Danach
