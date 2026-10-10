@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.26.0 (2026-10-10)
+- Neu: **Instanz aus einer Sicherung wiederherstellen** (Admin-Aktion „Aus Sicherung wiederherstellen …“, nur Superuser, Kürzel eintippen).
+  Die Seite listet alle Sicherungen der Instanz (lokal und auf der Netzwerkfreigabe, mit Zeitpunkt, Herkunft und Größe). Ablauf: Instanz
+  starten, **den jetzigen Stand sichern** (voreingestellt, abwählbar für defekte Instanzen), Sicherung bereitstellen (von der Freigabe
+  herunterladen) und in den Container kopieren, Worker anhalten, Datenbank leeren, mit Feuerix' `restore.sh` Datenbank und optional
+  Medien zurückspielen, neu starten (Migrationen laufen beim Start). Bricht es ab, nachdem die Datenbank geleert wurde, steht die
+  Instanz auf „Fehlgeschlagen“ und die Sicherung vom Stand davor liegt zum Zurückspielen bereit. Aktuell nur Feuerix (Datenbank und
+  Medien); Paperless und OpenSlides werden von Hand zurückgespielt.
+
 ## 0.25.1 (2026-10-10)
 - Das Backup-Ziel zeigt jetzt oben seinen **Status**: „NICHT AKTIV - es wird nichts hochgeladen“ (häufigster Grund, warum nichts auf
   der Freigabe landet: der Haken „aktiv“ fehlt, auch wenn der Verbindungstest klappt), sonst Server/Freigabe, Erreichbarkeit und

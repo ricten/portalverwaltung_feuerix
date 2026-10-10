@@ -58,6 +58,8 @@ class FakeSMB:
 
     def open_file(self, pfad, mode="rb"):
         fake = self
+        if "r" in mode:
+            return io.BytesIO(self.dateien[pfad][0])
 
         class Datei(io.BytesIO):
             def close(self_):

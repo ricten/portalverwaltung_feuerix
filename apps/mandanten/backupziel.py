@@ -61,6 +61,50 @@ def testen(ziel):
     return f"Verbindung zu \\\\{ziel.server}\\{ziel.freigabe} erfolgreich (Schreiben und Löschen getestet)."
 
 
+def auflisten(mandant):
+    """Dateien (Name, Groesse) direkt im Ordner `<Wurzel>\\<kuerzel>\\` auf der Freigabe."""
+    ziel = aktuell()
+    if ziel is None:
+        return []
+    smb = _smb()
+    try:
+        _verbinden(ziel, smb)
+        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel)
+        return [(e.name, e.stat().st_size) for e in smb.scandir(remote) if e.is_file()]
+    except BereitstellungsFehler:
+        raise
+    except Exception as e:
+        raise _fehler("Freigabe lesen", e)
+
+
+def herunterladen(mandant, name, zielordner):
+    """Laedt `<Wurzel>\\<kuerzel>\\<name>` nach `zielordner/name` und prueft die Groesse. -> lokaler Pfad."""
+    if name != ntpath.basename(name) or "/" in name or name in ("", ".", ".."):
+        raise BereitstellungsFehler(f"Ungültiger Dateiname: {name!r}")
+    ziel = aktuell()
+    if ziel is None:
+        raise BereitstellungsFehler("Kein aktives Backup-Ziel.")
+    smb = _smb()
+    lokal = Path(zielordner) / name
+    try:
+        _verbinden(ziel, smb)
+        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel, name)
+        erwartet = smb.stat(remote).st_size
+        with smb.open_file(remote, mode="rb") as quelle, open(lokal, "wb") as senke:
+            while True:
+                stueck = quelle.read(CHUNK)
+                if not stueck:
+                    break
+                senke.write(stueck)
+        if lokal.stat().st_size != erwartet:
+            raise BereitstellungsFehler(f"{name}: Größe nach dem Herunterladen stimmt nicht")
+    except BereitstellungsFehler:
+        raise
+    except Exception as e:
+        raise _fehler(f"Herunterladen von {name}", e)
+    return lokal
+
+
 def _spiegeln(smb, ziel, lokal, remote, rekursiv):
     """Laedt die Dateien aus `lokal` nach `remote`, die dort fehlen (gleicher Name und gleiche Groesse = schon da),
     prueft die Groesse und - mit `rekursiv` - auch Unterordner. -> Anzahl neu hochgeladener Dateien."""

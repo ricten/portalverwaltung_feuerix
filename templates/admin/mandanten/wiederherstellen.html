@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Start</a> &rsaquo; <a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}">Mandanten-Instanzen</a> &rsaquo; Aus Sicherung wiederherstellen</div>
+{% endblock %}
+{% block content %}
+<h1>Instanz „{{ instanz.kuerzel }}“ aus einer Sicherung wiederherstellen</h1>
+<p><strong>{{ instanz.verein_name }}</strong> ({{ instanz.domain }}) &ndash; Status: {{ instanz.get_status_display }}</p>
+
+<div class="pv-update pv-update-fehler" style="display:block">
+  <p><strong>Die aktuelle Datenbank der Instanz wird ersetzt.</strong> Alle Änderungen seit der gewählten Sicherung gehen verloren
+  (außer, du lässt vorher den jetzigen Stand sichern - das ist voreingestellt).</p>
+</div>
+
+{% if freigabe_fehler %}<p class="errornote">Die Netzwerkfreigabe konnte nicht gelesen werden: {{ freigabe_fehler }}</p>{% endif %}
+
+{% if angebote %}
+<form method="post">{% csrf_token %}
+  <h2>Sicherung wählen</h2>
+  <table>
+    <thead><tr><th></th><th>Zeitpunkt</th><th>Datenbank</th><th>Medien</th><th>Größe</th></tr></thead>
+    <tbody>
+    {% for a in angebote %}
+      <tr>
+        <td><input type="radio" name="stamp" value="{{ a.stamp }}" id="s{{ a.stamp }}" {% if forloop.first %}checked{% endif %}></td>
+        <td><label for="s{{ a.stamp }}">{{ a.zeit|date:"d.m.Y H:i:s" }}</label></td>
+        <td>{{ a.ort_db }}</td>
+        <td>{{ a.ort_media|default:"–" }}</td>
+        <td>{{ a.groesse|filesizeformat }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p>„lokal“ = auf diesem Server in <code>instanzen/{{ instanz.kuerzel }}/backups</code>, „freigabe“ = auf der Netzwerkfreigabe (wird für die
+  Wiederherstellung heruntergeladen).</p>
+
+  <h2>Optionen</h2>
+  <p><label><input type="checkbox" name="mit_medien" checked> Medien (hochgeladene Dateien) mit zurückspielen - falls die Sicherung welche enthält</label></p>
+  <p><label><input type="checkbox" name="vorher_sichern" checked> <strong>Vorher den jetzigen Stand sichern</strong> (empfohlen; nur bei einer defekten Instanz abwählen, die sich nicht sichern lässt)</label></p>
+
+  <p>Zur Bestätigung das Kürzel <strong>{{ instanz.kuerzel }}</strong> eingeben:</p>
+  <p><input type="text" name="kuerzel" autocomplete="off" style="width:20em"></p>
+  <p>
+    <input type="submit" value="Jetzt wiederherstellen" class="default" style="background:#c62828">
+    <a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}" class="button cancel-link">Abbrechen</a>
+  </p>
+</form>
+{% else %}
+<p>Für diese Instanz wurden keine Sicherungen gefunden (weder lokal noch auf der Netzwerkfreigabe). Sicherungen entstehen mit der
+Aktion „Datenbank und Medien sichern“.</p>
+<p><a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}" class="button">Zurück</a></p>
+{% endif %}
+{% endblock %}

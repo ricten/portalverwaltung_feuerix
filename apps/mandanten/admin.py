@@ -50,7 +50,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        "protokoll", "feuerix_version", "paperless_version", "openslides_version",
                        "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "endgueltig_loeschen", "sichern", "aktualisieren",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
@@ -69,6 +69,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         eigene = [path("<int:pk>/status/", self.admin_site.admin_view(self.status_json), name="mandanten_status"),
+                  path("<int:pk>/wiederherstellen/", self.admin_site.admin_view(self.wiederherstellen_view),
+                       name="mandanten_wiederherstellen"),
                   path("<int:pk>/endgueltig-loeschen/", self.admin_site.admin_view(self.loeschen_view),
                        name="mandanten_loeschen"),
                   path("update/pruefen/", self.admin_site.admin_view(self.update_pruefen_view),
@@ -120,6 +122,42 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         if obj is not None and obj.status not in ("neu", "geloescht"):
             return False
         return super().has_delete_permission(request, obj)
+
+    def wiederherstellen_view(self, request, pk):
+        """Auswahl einer Sicherung und Bestaetigung der Wiederherstellung (nur Superuser)."""
+        from django.http import Http404
+        from django.template.response import TemplateResponse
+        from . import wiederherstellung
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        m = MandantInstanz.objects.filter(pk=pk).first()
+        if m is None:
+            raise Http404
+        liste = HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
+        if m.status not in ("laeuft", "gestoppt", "fehlgeschlagen"):
+            self.message_user(request, f"{m.kuerzel}: Wiederherstellen nicht möglich im Status "
+                                       f"„{m.get_status_display()}“.", messages.WARNING)
+            return liste
+        angebote, freigabe_fehler = wiederherstellung.angebote(m)
+        if request.method == "POST":
+            stamp = request.POST.get("stamp", "")
+            if request.POST.get("kuerzel", "").strip() != m.kuerzel:
+                self.message_user(request, "Das Kürzel stimmt nicht - es wurde nichts wiederhergestellt.", messages.ERROR)
+            elif stamp not in {a["stamp"] for a in angebote}:
+                self.message_user(request, "Bitte eine der angezeigten Sicherungen wählen.", messages.ERROR)
+            else:
+                mit_medien = "mit_medien" in request.POST
+                vorher_sichern = "vorher_sichern" in request.POST
+                vormerken(m, "Wiederherstellung: in der Warteschlange")
+                self._log(request, m, f"Wiederherstellung aus Sicherung {stamp} gestartet "
+                                      f"({'ohne' if not vorher_sichern else 'mit'} Sicherung des jetzigen Stands)")
+                tasks.mandant_wiederherstellen_task.delay(m.pk, stamp, mit_medien, vorher_sichern)
+                self.message_user(request, f"{m.kuerzel}: Wiederherstellung gestartet - Fortschritt siehe Spalte „Fortschritt“.",
+                                  messages.INFO)
+                return liste
+        kontext = dict(self.admin_site.each_context(request), title="Aus Sicherung wiederherstellen", instanz=m,
+                       opts=self.model._meta, angebote=angebote, freigabe_fehler=freigabe_fehler)
+        return TemplateResponse(request, "admin/mandanten/wiederherstellen.html", kontext)
 
     def loeschen_view(self, request, pk):
         """Bestaetigungsseite fuer das endgueltige Loeschen (nur Superuser): vorher Abschlusssicherung."""
@@ -413,6 +451,13 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         if gestartet:
             self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
+
+    @admin.action(description="Aus Sicherung wiederherstellen ...")
+    def wiederherstellen(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(request, "Bitte genau eine Instanz zum Wiederherstellen auswählen.", messages.WARNING)
+            return None
+        return HttpResponseRedirect(reverse("admin:mandanten_wiederherstellen", args=[queryset.first().pk]))
 
     @admin.action(description="Instanz ENDGÜLTIG löschen (mit Abschlusssicherung) ...")
     def endgueltig_loeschen(self, request, queryset):

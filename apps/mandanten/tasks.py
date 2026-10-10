@@ -53,6 +53,13 @@ def mandant_loeschen_task(mandant_id):
 
 
 @shared_task
+def mandant_wiederherstellen_task(mandant_id, stamp, mit_medien=True, vorher_sichern=True):
+    from . import wiederherstellung
+    _ausfuehren(lambda m: wiederherstellung.wiederherstellen(m, stamp, mit_medien, vorher_sichern),
+                mandant_id, protokollieren=True)
+
+
+@shared_task
 def mandant_backup_task(mandant_id):
     _ausfuehren(betrieb.backup, mandant_id, protokollieren=True)
 
