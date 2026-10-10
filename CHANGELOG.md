@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.27.0 (2026-10-10)
+- Neu: **Wiederherstellung auch für OpenSlides und Paperless-ngx** (Seite „Aus Sicherung wiederherstellen“, je Dienst ein eigener Abschnitt,
+  Kürzel-Bestätigung, voreingestellte Sicherung des jetzigen Stands). Feuerix und die jeweils anderen Dienste bleiben unberührt.
+  - **OpenSlides** (nach der Anleitung des Herstellers): Dienste herunterfahren, nur die Datenbank starten, alle Schemas leeren, den
+    SQL-Dump (lokal oder von der Freigabe) einspielen, alles starten. Vorher wird der jetzige Stand als Dump gesichert.
+  - **Paperless-ngx (experimentell, noch nicht gegen eine echte Instanz geprüft)**: Paperless anhalten, Datenbank leeren, in einem einmaligen
+    Container ohne den normalen Start (der sonst schon einen Admin anlegt) `migrate` und `document_importer` ausführen, starten und die
+    Feuerix-Anbindung mit einem neuen Token versorgen. Angeboten werden der letzte Export (Paperless überschreibt den Ordner `export`
+    bei jedem Export, ältere Stände gibt es dort nicht) und die Exporte `_vorher-…` vom Stand vor einer Wiederherstellung - der jetzige
+    Stand wird vorher dorthin exportiert, nie in den Ordner, aus dem wiederhergestellt wird.
+  - Bricht eine Wiederherstellung ab, nachdem die Datenbank geleert wurde, nennt das Protokoll, wo der Stand davor liegt; der Status der
+    Instanz (Feuerix) bleibt dabei unverändert.
+
 ## 0.26.1 (2026-10-10)
 - Fix: Die Aktion **„Sichern“** (und `manage.py mandant_backup`) sichert jetzt **alle** Dienste der Instanz: Feuerix (Datenbank,
   Medien) plus - falls eingerichtet - den Paperless-Export und den OpenSlides-Datenbank-Dump, bei aktivem Backup-Ziel jeweils auch

@@ -139,24 +139,31 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                                        f"„{m.get_status_display()}“.", messages.WARNING)
             return liste
         angebote, freigabe_fehler = wiederherstellung.angebote(m)
+        angebote_os, os_fehler = wiederherstellung.angebote_openslides(m) if m.openslides_domain else ([], "")
+        angebote_pl = wiederherstellung.angebote_paperless(m) if m.paperless_domain else []
         if request.method == "POST":
-            stamp = request.POST.get("stamp", "")
+            dienst = request.POST.get("dienst", "feuerix")
+            auswahl = request.POST.get("stamp", "")
+            gueltig = {"feuerix": {a["stamp"] for a in angebote},
+                       "openslides": {a["name"] for a in angebote_os},
+                       "paperless": {a["name"] for a in angebote_pl}}.get(dienst, set())
             if request.POST.get("kuerzel", "").strip() != m.kuerzel:
                 self.message_user(request, "Das Kürzel stimmt nicht - es wurde nichts wiederhergestellt.", messages.ERROR)
-            elif stamp not in {a["stamp"] for a in angebote}:
+            elif auswahl not in gueltig:
                 self.message_user(request, "Bitte eine der angezeigten Sicherungen wählen.", messages.ERROR)
             else:
                 mit_medien = "mit_medien" in request.POST
                 vorher_sichern = "vorher_sichern" in request.POST
                 vormerken(m, "Wiederherstellung: in der Warteschlange")
-                self._log(request, m, f"Wiederherstellung aus Sicherung {stamp} gestartet "
+                self._log(request, m, f"Wiederherstellung ({dienst}) aus {auswahl} gestartet "
                                       f"({'ohne' if not vorher_sichern else 'mit'} Sicherung des jetzigen Stands)")
-                tasks.mandant_wiederherstellen_task.delay(m.pk, stamp, mit_medien, vorher_sichern)
-                self.message_user(request, f"{m.kuerzel}: Wiederherstellung gestartet - Fortschritt siehe Spalte „Fortschritt“.",
-                                  messages.INFO)
+                tasks.mandant_wiederherstellen_task.delay(m.pk, auswahl, mit_medien, vorher_sichern, dienst)
+                self.message_user(request, f"{m.kuerzel}: Wiederherstellung ({dienst}) gestartet - Fortschritt siehe Spalte "
+                                           "„Fortschritt“.", messages.INFO)
                 return liste
         kontext = dict(self.admin_site.each_context(request), title="Aus Sicherung wiederherstellen", instanz=m,
-                       opts=self.model._meta, angebote=angebote, freigabe_fehler=freigabe_fehler)
+                       opts=self.model._meta, angebote=angebote, freigabe_fehler=freigabe_fehler,
+                       angebote_os=angebote_os, os_fehler=os_fehler, angebote_pl=angebote_pl)
         return TemplateResponse(request, "admin/mandanten/wiederherstellen.html", kontext)
 
     def loeschen_view(self, request, pk):

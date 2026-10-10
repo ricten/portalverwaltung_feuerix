@@ -30,9 +30,10 @@ Aktuell automatisiert:
   `mandant_abbauen <kürzel> --daten-loeschen`. Vorher werden Feuerix (Datenbank, Medien, bei aktivem Backup-Ziel auch auf der
   Freigabe), Paperless (Export) und OpenSlides (Dump) gesichert - scheitert etwas, wird nichts gelöscht. Der Instanzordner
   mit `.env` und allen Sicherungen landet in `instanzen/_geloescht/` und wird nie automatisch entfernt.
-- **Wiederherstellung** (Admin-Aktion „Aus Sicherung wiederherstellen …“, Superuser): wählt eine Sicherung der Instanz (lokal oder von der
-  Netzwerkfreigabe), sichert vorher den jetzigen Stand, leert die Datenbank und spielt Datenbank und Medien mit Feuerix' `restore.sh`
-  zurück. Nur Feuerix; Paperless/OpenSlides bitte von Hand (Export bzw. SQL-Dump aus dem Ordner der Instanz).
+- **Wiederherstellung** (Admin-Aktion „Aus Sicherung wiederherstellen …“, Superuser): je Dienst eine Sicherung wählen, vorher wird der jetzige
+  Stand gesichert. **Feuerix**: Datenbank leeren, Datenbank und Medien mit Feuerix' `restore.sh` zurückspielen (Sicherungen lokal oder von der
+  Netzwerkfreigabe). **OpenSlides**: Dump nach der Anleitung des Herstellers einspielen. **Paperless-ngx (experimentell)**: Datenbank leeren und den
+  Export mit dem Importer von Paperless einspielen; angeboten werden der letzte Export und die `_vorher-…`-Exporte.
 - **Abbau**: `python manage.py mandant_abbauen <kürzel> [--daten-loeschen]` stoppt die Instanz und nimmt sie
   aus dem Reverse Proxy (Status „Stillgelegt“; mit `--daten-loeschen` werden auch Datenbank und Medien
   unwiderruflich entfernt, Status „gelöscht“).

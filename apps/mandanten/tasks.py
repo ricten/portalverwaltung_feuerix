@@ -53,10 +53,18 @@ def mandant_loeschen_task(mandant_id):
 
 
 @shared_task
-def mandant_wiederherstellen_task(mandant_id, stamp, mit_medien=True, vorher_sichern=True):
+def mandant_wiederherstellen_task(mandant_id, auswahl, mit_medien=True, vorher_sichern=True, dienst="feuerix"):
     from . import wiederherstellung
-    _ausfuehren(lambda m: wiederherstellung.wiederherstellen(m, stamp, mit_medien, vorher_sichern),
-                mandant_id, protokollieren=True)
+
+    def lauf(m):
+        if dienst == "openslides":
+            wiederherstellung.wiederherstellen_openslides(m, auswahl, vorher_sichern)
+        elif dienst == "paperless":
+            wiederherstellung.wiederherstellen_paperless(m, auswahl, vorher_sichern)
+        else:
+            wiederherstellung.wiederherstellen(m, auswahl, mit_medien, vorher_sichern)
+
+    _ausfuehren(lauf, mandant_id, protokollieren=True)
 
 
 @shared_task

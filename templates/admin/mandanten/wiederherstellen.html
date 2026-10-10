@@ -7,22 +7,22 @@
 <p><strong>{{ instanz.verein_name }}</strong> ({{ instanz.domain }}) &ndash; Status: {{ instanz.get_status_display }}</p>
 
 <div class="pv-update pv-update-fehler" style="display:block">
-  <p><strong>Die aktuelle Datenbank der Instanz wird ersetzt.</strong> Alle Änderungen seit der gewählten Sicherung gehen verloren
-  (außer, du lässt vorher den jetzigen Stand sichern - das ist voreingestellt).</p>
+  <p><strong>Die aktuellen Daten des gewählten Dienstes werden ersetzt.</strong> Alle Änderungen seit der Sicherung gehen verloren
+  (außer, du lässt vorher den jetzigen Stand sichern - das ist voreingestellt). Die anderen Dienste der Instanz bleiben unberührt.</p>
 </div>
 
+{# ------------------------------------------------------------------ Feuerix #}
+<h2>Feuerix (Datenbank und Medien)</h2>
 {% if freigabe_fehler %}<p class="errornote">Die Netzwerkfreigabe konnte nicht gelesen werden: {{ freigabe_fehler }}</p>{% endif %}
-
 {% if angebote %}
-<form method="post">{% csrf_token %}
-  <h2>Sicherung wählen</h2>
+<form method="post">{% csrf_token %}<input type="hidden" name="dienst" value="feuerix">
   <table>
     <thead><tr><th></th><th>Zeitpunkt</th><th>Datenbank</th><th>Medien</th><th>Größe</th></tr></thead>
     <tbody>
     {% for a in angebote %}
       <tr>
-        <td><input type="radio" name="stamp" value="{{ a.stamp }}" id="s{{ a.stamp }}" {% if forloop.first %}checked{% endif %}></td>
-        <td><label for="s{{ a.stamp }}">{{ a.zeit|date:"d.m.Y H:i:s" }}</label></td>
+        <td><input type="radio" name="stamp" value="{{ a.stamp }}" id="f{{ a.stamp }}" {% if forloop.first %}checked{% endif %}></td>
+        <td><label for="f{{ a.stamp }}">{{ a.zeit|date:"d.m.Y H:i:s" }}</label></td>
         <td>{{ a.ort_db }}</td>
         <td>{{ a.ort_media|default:"–" }}</td>
         <td>{{ a.groesse|filesizeformat }}</td>
@@ -30,23 +30,70 @@
     {% endfor %}
     </tbody>
   </table>
-  <p>„lokal“ = auf diesem Server in <code>instanzen/{{ instanz.kuerzel }}/backups</code>, „freigabe“ = auf der Netzwerkfreigabe (wird für die
-  Wiederherstellung heruntergeladen).</p>
-
-  <h2>Optionen</h2>
-  <p><label><input type="checkbox" name="mit_medien" checked> Medien (hochgeladene Dateien) mit zurückspielen - falls die Sicherung welche enthält</label></p>
-  <p><label><input type="checkbox" name="vorher_sichern" checked> <strong>Vorher den jetzigen Stand sichern</strong> (empfohlen; nur bei einer defekten Instanz abwählen, die sich nicht sichern lässt)</label></p>
-
-  <p>Zur Bestätigung das Kürzel <strong>{{ instanz.kuerzel }}</strong> eingeben:</p>
-  <p><input type="text" name="kuerzel" autocomplete="off" style="width:20em"></p>
-  <p>
-    <input type="submit" value="Jetzt wiederherstellen" class="default" style="background:#c62828">
-    <a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}" class="button cancel-link">Abbrechen</a>
-  </p>
+  <p>„lokal“ = auf diesem Server in <code>instanzen/{{ instanz.kuerzel }}/backups</code>, „freigabe“ = auf der Netzwerkfreigabe (wird heruntergeladen).</p>
+  <p><label><input type="checkbox" name="mit_medien" checked> Medien (hochgeladene Dateien) mit zurückspielen, falls enthalten</label></p>
+  <p><label><input type="checkbox" name="vorher_sichern" checked> <strong>Vorher den jetzigen Stand sichern</strong> (empfohlen; nur bei einer defekten Instanz abwählen)</label></p>
+  <p>Kürzel <strong>{{ instanz.kuerzel }}</strong> zur Bestätigung: <input type="text" name="kuerzel" autocomplete="off" style="width:14em">
+     <input type="submit" value="Feuerix wiederherstellen" class="default" style="background:#c62828"></p>
 </form>
 {% else %}
-<p>Für diese Instanz wurden keine Sicherungen gefunden (weder lokal noch auf der Netzwerkfreigabe). Sicherungen entstehen mit der
-Aktion „Datenbank und Medien sichern“.</p>
-<p><a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}" class="button">Zurück</a></p>
+<p>Keine Feuerix-Sicherungen gefunden (weder lokal noch auf der Freigabe).</p>
 {% endif %}
+
+{# ------------------------------------------------------------------ OpenSlides #}
+{% if instanz.openslides_domain %}
+<h2>OpenSlides (Datenbank-Dump)</h2>
+{% if os_fehler %}<p class="errornote">Die Netzwerkfreigabe konnte nicht gelesen werden: {{ os_fehler }}</p>{% endif %}
+{% if angebote_os %}
+<form method="post">{% csrf_token %}<input type="hidden" name="dienst" value="openslides">
+  <table>
+    <thead><tr><th></th><th>Zeitpunkt</th><th>OpenSlides-Version</th><th>Quelle</th><th>Größe</th></tr></thead>
+    <tbody>
+    {% for a in angebote_os %}
+      <tr>
+        <td><input type="radio" name="stamp" value="{{ a.name }}" id="o{{ a.stamp }}" {% if forloop.first %}checked{% endif %}></td>
+        <td><label for="o{{ a.stamp }}">{{ a.zeit|date:"d.m.Y H:i:s" }}</label></td>
+        <td>{{ a.version }}</td><td>{{ a.ort }}</td><td>{{ a.groesse|filesizeformat }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p>OpenSlides wird heruntergefahren, die Datenbank ersetzt und OpenSlides wieder gestartet (Anleitung des Herstellers). Der Dump
+  sollte zur laufenden OpenSlides-Version passen ({{ instanz.openslides_version|default:"?" }}).</p>
+  <p><label><input type="checkbox" name="vorher_sichern" checked> <strong>Vorher den jetzigen Stand sichern</strong></label></p>
+  <p>Kürzel <strong>{{ instanz.kuerzel }}</strong> zur Bestätigung: <input type="text" name="kuerzel" autocomplete="off" style="width:14em">
+     <input type="submit" value="OpenSlides wiederherstellen" class="default" style="background:#c62828"></p>
+</form>
+{% else %}<p>Keine OpenSlides-Sicherungen gefunden.</p>{% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ Paperless #}
+{% if instanz.paperless_domain %}
+<h2>Paperless-ngx (Export) <small style="color:#c62828">experimentell</small></h2>
+{% if angebote_pl %}
+<form method="post">{% csrf_token %}<input type="hidden" name="dienst" value="paperless">
+  <table>
+    <thead><tr><th></th><th>Stand vom</th><th>Export</th></tr></thead>
+    <tbody>
+    {% for a in angebote_pl %}
+      <tr>
+        <td><input type="radio" name="stamp" value="{{ a.name }}" id="p{{ forloop.counter }}" {% if forloop.first %}checked{% endif %}></td>
+        <td><label for="p{{ forloop.counter }}">{{ a.zeit|date:"d.m.Y H:i:s" }}</label></td>
+        <td>{{ a.anzeige }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p><strong>Wichtig:</strong> Paperless aktualisiert den Ordner <code>export</code> bei jedem Export, deshalb gibt es dort nur den letzten Stand.
+  Paperless wird angehalten, die Datenbank <strong>geleert</strong> und der Export mit dem Importer von Paperless eingespielt (der Hersteller verlangt
+  dafür eine leere Installation). Der jetzige Stand wird vorher als <code>_vorher-…</code> exportiert. Die API-Anbindung in Feuerix wird danach
+  mit einem neuen Token versorgt. Dieser Weg ist noch nicht gegen eine echte Instanz geprüft - bitte zuerst an einer Test-Instanz probieren.</p>
+  <p><label><input type="checkbox" name="vorher_sichern" checked> <strong>Vorher den jetzigen Stand exportieren</strong></label></p>
+  <p>Kürzel <strong>{{ instanz.kuerzel }}</strong> zur Bestätigung: <input type="text" name="kuerzel" autocomplete="off" style="width:14em">
+     <input type="submit" value="Paperless wiederherstellen" class="default" style="background:#c62828"></p>
+</form>
+{% else %}<p>Kein Paperless-Export gefunden (Ordner <code>export</code> enthält kein <code>manifest.json</code>). Exporte entstehen mit der Aktion „Sichern“.</p>{% endif %}
+{% endif %}
+
+<p><a href="{% url 'admin:mandanten_mandantinstanz_changelist' %}" class="button cancel-link">Zurück</a></p>
 {% endblock %}

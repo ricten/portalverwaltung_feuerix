@@ -61,15 +61,15 @@ def testen(ziel):
     return f"Verbindung zu \\\\{ziel.server}\\{ziel.freigabe} erfolgreich (Schreiben und Löschen getestet)."
 
 
-def auflisten(mandant):
-    """Dateien (Name, Groesse) direkt im Ordner `<Wurzel>\\<kuerzel>\\` auf der Freigabe."""
+def auflisten(mandant, unterordner=""):
+    """Dateien (Name, Groesse) direkt im Ordner `<Wurzel>\\<kuerzel>\\[<unterordner>\\]` auf der Freigabe."""
     ziel = aktuell()
     if ziel is None:
         return []
     smb = _smb()
     try:
         _verbinden(ziel, smb)
-        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel)
+        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel, *[t for t in re.split(r"[\\/]+", unterordner) if t])
         return [(e.name, e.stat().st_size) for e in smb.scandir(remote) if e.is_file()]
     except BereitstellungsFehler:
         raise
@@ -77,8 +77,8 @@ def auflisten(mandant):
         raise _fehler("Freigabe lesen", e)
 
 
-def herunterladen(mandant, name, zielordner):
-    """Laedt `<Wurzel>\\<kuerzel>\\<name>` nach `zielordner/name` und prueft die Groesse. -> lokaler Pfad."""
+def herunterladen(mandant, name, zielordner, unterordner=""):
+    """Laedt `<Wurzel>\\<kuerzel>\\[<unterordner>\\]<name>` nach `zielordner/name` und prueft die Groesse. -> lokaler Pfad."""
     if name != ntpath.basename(name) or "/" in name or name in ("", ".", ".."):
         raise BereitstellungsFehler(f"Ungültiger Dateiname: {name!r}")
     ziel = aktuell()
@@ -88,7 +88,7 @@ def herunterladen(mandant, name, zielordner):
     lokal = Path(zielordner) / name
     try:
         _verbinden(ziel, smb)
-        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel, name)
+        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel, *[t for t in re.split(r"[\\/]+", unterordner) if t], name)
         erwartet = smb.stat(remote).st_size
         with smb.open_file(remote, mode="rb") as quelle, open(lokal, "wb") as senke:
             while True:
