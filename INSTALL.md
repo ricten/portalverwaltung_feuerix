@@ -12,6 +12,9 @@ Anleitung für einen Linux-Server (getestet mit Debian 13). Überblick über Fun
 | `sudo`-Rechte für diesen Benutzer | der Installer legt systemd-Dienste an |
 | Offene Ports **80** und **443** | Caddy holt das Let's-Encrypt-Zertifikat |
 | DNS-Eintrag für die Portal-Domain (und je Verein, am besten Wildcard `*.deine-domain`) | zeigt auf die Server-IP |
+| Internetzugang zu GitHub und den Docker-Registries | Feuerix-Checkout, Updates, `osmanage`, Images (GitHub-API für die Versionsprüfung von Paperless/OpenSlides) |
+
+Optional: eine SMB-Freigabe (Windows, NAS, Samba) für Sicherungen und ein SMTP-Server für E-Mail-Benachrichtigungen.
 
 ## 1. Portalverwaltung holen
 
@@ -27,40 +30,58 @@ Wichtig: das **ganze Repository** holen (nicht nur einzelne Dateien) – der Ins
 ## 2. Installer starten
 
 ```bash
-./install.sh        # ohne sudo – das Skript ruft sudo selbst auf, wo nötig
+./install.sh        # ohne sudo – das Skript bricht ab, wenn es als root läuft, und ruft sudo selbst auf, wo nötig
 ```
 
 Der Assistent fragt nacheinander:
 
 1. **Pfad zum Feuerix-Checkout** – Standard `../Feuerix` (neben dem Portal). Fehlt er, bietet der Installer an, ihn von
-   `https://github.com/ricten/Feuerix` zu klonen. Daraus wird die `docker-compose.yml` jeder Instanz genommen.
+   `https://github.com/ricten/Feuerix` zu klonen. Daraus wird die `docker-compose.yml` jeder Instanz genommen und später auch das
+   Feuerix-Update gezogen. Gehört der Ordner einem anderen Benutzer, bietet der Installer an, den Besitzer zu ändern.
 2. **PostgreSQL + Redis als Docker-Container** mitinstallieren (sonst werden vorhandene verwendet).
 3. **Caddy** (Reverse Proxy mit automatischem HTTPS) installieren und von der Portalverwaltung steuern lassen.
-4. **Celery-Worker** als systemd-Dienst (nötig für „Bereitstellen“ im Admin).
+4. **Celery-Worker** als systemd-Dienst (nötig für „Bereitstellen“ und alle längeren Aktionen im Admin).
 5. **Weboberfläche** (Gunicorn) als systemd-Dienst.
 6. **Domain der Portalverwaltung** (leer = nur lokal unter `127.0.0.1:8000`) und **E-Mail für Let's Encrypt**.
+7. Am Ende: **Online-Check** (alle 5 Minuten, systemd-Timer) einrichten.
 
-Danach erzeugt er `.env` mit Zufallsgeheimnissen, richtet die Datenbank ein, führt die Migrationen aus und fragt nach
+Dazwischen erzeugt er `.env` mit Zufallsgeheimnissen, richtet die Datenbank ein, führt die Migrationen aus und fragt nach
 Benutzername und Passwort des Portal-Administrators. Mehrfaches Ausführen ist möglich; eine vorhandene `.env` wird nicht
 überschrieben.
 
-> **`FIELD_ENCRYPTION_KEY` aus der `.env` sichern.** Ohne ihn sind alle gespeicherten Geheimnisse der Vereins-Instanzen
-> unlesbar.
+> **`FIELD_ENCRYPTION_KEY` aus der `.env` sichern.** Ohne ihn sind alle gespeicherten Geheimnisse (der Instanzen, des Backup-Ziels
+> und des Mailservers) unlesbar.
 
 ## 3. Anmelden und ersten Verein anlegen
 
 1. `https://<portal-domain>/` öffnen (leitet auf `/admin/`) und mit dem Portal-Administrator anmelden. Die installierte
    **Version** steht in der Fußzeile.
 2. **Mandanten-Instanzen → Hinzufügen**: Kürzel, Vereinsname, Domain, Administrator-Benutzername und -E-Mail ausfüllen.
-   Optional die Haken **Paperless-ngx** / **OpenSlides** setzen.
+   Optional die Haken **Paperless-ngx** / **OpenSlides** setzen (das Domain-Feld nur ausfüllen, wenn die Dienste unter einer
+   eigenen Adresse laufen sollen; sonst wird `paperless.<domain>` bzw. `openslides.<domain>` genommen).
 3. Instanz in der Liste markieren → Aktion **Bereitstellen**. Der Fortschrittsbalken zeigt die Schritte; der erste Lauf
    baut das Feuerix-Image und dauert einige Minuten.
-4. Im Betrieb: Aktionen **Stoppen**, **Starten** und **Neustarten** (auf der Kommandozeile
-   `manage.py mandant_dienst <kürzel> stop|start|restart`). Datenbank und Medien bleiben dabei erhalten.
-5. Aktion **Zugangsdaten des Instanz-Administrators anzeigen** zeigt Adresse, Benutzer und Startpasswort der neuen
+4. Aktion **Zugangsdaten des Instanz-Administrators anzeigen** zeigt Adresse, Benutzer und Startpasswort der neuen
    Instanz (nur für Superuser).
 
+Im Betrieb: **Starten**, **Stoppen**, **Neustarten** (auch als runde Knöpfe in der Zeile), **Instanz stilllegen** (Container
+entfernen, Daten bleiben), **Sichern**, **Aus Sicherung wiederherstellen** und **Instanz endgültig löschen** – Einzelheiten im
+[README](README.md#funktionen-im-überblick).
+
+## 4. Empfohlen direkt danach
+
+1. **Backup-Ziel** einrichten (Abschnitt unten), damit Sicherungen nicht nur auf dem Server liegen.
+2. **Benachrichtigungen** einrichten (Abschnitt unten), damit Ausfälle und fehlgeschlagene Sicherungen per Mail ankommen.
+3. Prüfen, dass der **Online-Check-Timer** läuft: `systemctl list-timers portal-check.timer` (sonst siehe „Online-Check
+   nachträglich einrichten“).
+4. Im Update-Hinweis auf der Startseite einmal **„Erneut prüfen“** klicken: Das erfasst die Versionen von Paperless und
+   OpenSlides und zeigt, ob es etwas Neues gibt.
+5. Eine **Test-Sicherung** (Aktion „Sichern“) und – an einer Test-Instanz – eine **Wiederherstellung** ausprobieren, bevor du sie
+   im Ernstfall brauchst.
+
 ## Aktualisieren
+
+**Die Portalverwaltung selbst** aktualisierst du von Hand:
 
 ```bash
 cd /opt/verein
@@ -71,11 +92,20 @@ git pull
 sudo systemctl restart portal-web portal-worker
 ```
 
-Feuerix-Updates für die Vereins-Instanzen: Das Portal prüft selbst, ob es eine neuere Feuerix-Version gibt, und zeigt auf
-der Startseite des Admins einen Hinweis. Mit **Update jetzt ausrollen** wird der Code gezogen (`git pull`) und alle
-laufenden Instanzen werden nacheinander aktualisiert. Ohne Admin: `./venv/bin/python manage.py mandant_update_pruefen
---ausrollen`. Voraussetzung: der Feuerix-Checkout hat einen Upstream-Zweig (ein normaler `git clone`) und der Server
-erreicht GitHub. Die Prüfung lässt sich mit `UPDATE_PRUEFUNG_STUNDEN=0` in der `.env` abschalten.
+Starte die Dienste nicht neu, solange der Admin eine Instanz „In Arbeit“ zeigt: Der Worker bricht dabei laufende Aufträge ab
+(siehe Fehlerbehebung).
+
+**Feuerix für die Vereins-Instanzen:** Das Portal prüft selbst, ob es eine neuere Feuerix-Version gibt, und zeigt auf der
+Startseite einen Hinweis. Mit **Update jetzt ausrollen** wird der Code gezogen (`git pull`) und alle laufenden Instanzen werden
+nacheinander aktualisiert; einzelne Instanzen aktualisierst du mit dem Pfeil-Knopf in der Spalte „Version“. Vor jedem Update legt das
+Portal bei Bedarf eine frische Sicherung an (Feuerix, Paperless, OpenSlides) und aktualisiert nicht, wenn das fehlschlägt. Ohne Admin:
+`./venv/bin/python manage.py mandant_update_pruefen --ausrollen`. Voraussetzung: Der Feuerix-Checkout hat einen Upstream-Zweig (ein
+normaler `git clone`), gehört dem Dienstbenutzer, und der Server erreicht GitHub. Die Prüfung lässt sich mit
+`UPDATE_PRUEFUNG_STUNDEN=0` abschalten.
+
+**Paperless und OpenSlides:** Neue Versionen werden angezeigt und gemeldet, aber nie von selbst installiert. Das Update startest du
+mit dem Pfeil-Knopf in der Spalte „Version“ (OpenSlides nur für Patch-Versionen, z. B. 4.3.0 → 4.3.5; größere Sprünge bitte nach der
+Anleitung von OpenSlides von Hand).
 
 ## Online-Check nachträglich einrichten
 
@@ -113,17 +143,31 @@ Status: `systemctl list-timers portal-check.timer`, Ergebnis: `./venv/bin/python
 
 ## Backup-Ziel (Netzwerkfreigabe)
 
-Im Admin unter **Backup-Ziel**: Server (Hostname/IP), Freigabe, optionaler Unterordner, Benutzer und Passwort eintragen, **Aktiv**
-anhaken und mit **Speichern und Verbindung testen** prüfen. Unterstützt wird SMB/CIFS (Windows-Freigabe, NAS, Samba), kein
-NFS. Das Portal schreibt direkt per SMB (nichts wird gemountet); der Benutzer braucht Schreibrechte auf die Freigabe. Je Instanz
-entsteht ein Ordner mit dem Kürzel. Nach `git pull` einmal `./venv/bin/pip install -r requirements.txt` und `migrate`.
+Im Admin unter **Backup-Ziel**: Server (Hostname/IP), Freigabe, optionaler Unterordner, Benutzer und Passwort eintragen, **Haken „aktiv“
+setzen** und mit **Speichern und Verbindung testen** prüfen. Der Verbindungstest klappt auch bei inaktivem Ziel – hochgeladen wird erst,
+wenn „aktiv“ gesetzt ist. Die Zeile **Status** oben zeigt, ob wirklich hochgeladen wird, ob die Freigabe erreichbar ist und wann zuletzt
+etwas hochgeladen wurde.
+
+Unterstützt wird SMB/CIFS (Windows-Freigabe, NAS, Samba), kein NFS. Das Portal schreibt direkt per SMB (nichts wird gemountet, kein Root
+nötig, Port 445 muss erreichbar sein); der Benutzer braucht Schreibrechte auf die Freigabe. Je Instanz entsteht ein Ordner mit dem Kürzel
+unter dem eingestellten Unterordner: `…\<kürzel>\` (Feuerix-Sicherungen), `…\<kürzel>\openslides\` (Dumps), `…\<kürzel>\paperless\`
+(Export). Die Aktion **Sichern** legt alle drei an. Nach einem `git pull` einmal `pip install -r requirements.txt` und `migrate`.
 
 ## E-Mail-Benachrichtigung
 
 Im Admin unter **Benachrichtigungen**: SMTP-Server, Port, Verschlüsselung (STARTTLS 587, SSL 465), Benutzer und Passwort, Absender
-und Empfänger eintragen, **aktiv** anhaken und mit **Speichern und Test-Mail senden** prüfen. Mails gehen nur bei Ereignissen
-raus (Ausfall/Wiederkehr nach `Ausfall erst melden nach` Minuten, fehlgeschlagene Sicherung, neue Feuerix-Version). Ohne den
-Online-Check-Timer (siehe oben) gibt es keine Ausfallmeldungen. Wenn die Mail nicht ankommt: unter „Status“ steht der letzte Versandfehler.
+und Empfänger eintragen, **aktiv** anhaken und mit **Speichern und Test-Mail senden** prüfen. Mails gehen nur bei Ereignissen raus:
+Ausfall und Wiederkehr (nach `Ausfall erst melden nach` Minuten), fehlgeschlagene Sicherung, fehlgeschlagenes Update von Paperless oder
+OpenSlides, neue Version von Feuerix, Paperless oder OpenSlides. Ohne den Online-Check-Timer gibt es keine Ausfallmeldungen. Wenn die Mail
+nicht ankommt: unter „Status“ steht der letzte Versandfehler.
+
+## Sicherung wiederherstellen und Instanz löschen
+
+- **Wiederherstellen:** Instanz markieren → Aktion **Aus Sicherung wiederherstellen …** (nur Superuser). Dienst und Sicherung wählen,
+  „Vorher den jetzigen Stand sichern“ angehakt lassen, Kürzel eintippen. Die Sicherungen kommen vom Server oder von der Freigabe. Die
+  Wiederherstellung von Paperless ist experimentell – bitte zuerst an einer Test-Instanz probieren.
+- **Endgültig löschen:** Instanz markieren → **Instanz ENDGÜLTIG löschen …**, Kürzel eintippen. Das Portal sichert vorher alle Dienste und
+  löscht nichts, wenn die Sicherung fehlschlägt. Der Instanzordner (mit `.env`) bleibt in `instanzen/_geloescht/` liegen.
 
 ## Fehlerbehebung
 
@@ -135,16 +179,22 @@ Online-Check-Timer (siehe oben) gibt es keine Ausfallmeldungen. Wenn die Mail ni
 | `permission denied` bei Docker | Benutzer nicht in der Gruppe `docker` (Voraussetzungen) |
 | Anmeldung: „CSRF-Verifizierung fehlgeschlagen“ (403) | meist veraltete Cookies/Cache im Browser (z. B. nach einem Update): Seite im privaten Fenster öffnen oder Cookies der Domain löschen |
 | Update-Prüfung: „dubiose Besitzverhältnisse im Repository“ | Der Feuerix-Ordner gehört einem anderen Benutzer als die Portal-Dienste (meist root nach einem Installer-Lauf mit `sudo`): `sudo chown -R $USER: /opt/Feuerix`, dann „Erneut prüfen“ |
-| OpenSlides: „Startdaten konnten nicht angelegt werden … 401“ oder „Bind for 127.0.0.1:9002 failed: port is already allocated“ | Version < 0.23.1: mehrere OpenSlides-Instanzen teilten sich den Verwaltungsport 9002. Nach `git pull`, `migrate` und Neustart der Dienste bei der betroffenen (noch nicht initialisierten) Instanz erneut **Bereitstellen** - das Portal erzeugt den Stack dann mit eigenem Port neu. Bereits eingerichtete Instanzen laufen unverändert weiter. |
-| „Kein freier Port ab … gefunden“ | Das Portal prüft vor der Vergabe, ob ein Port auf dem Server frei ist. Mit `ss -ltnp` sehen Sie, was belegt ist; die Basis-Ports stehen in der `.env` (`WEB_PORT_BASIS`, `PAPERLESS_PORT_BASIS`, `OPENSLIDES_PORT_BASIS`, `OPENSLIDES_MANAGE_PORT_BASIS`). |
+| OpenSlides: „Startdaten konnten nicht angelegt werden … 401“ oder „Bind for 127.0.0.1:9002 failed: port is already allocated“ | Version < 0.23.1: mehrere OpenSlides-Instanzen teilten sich den Verwaltungsport 9002. Nach `git pull`, `migrate` und Neustart der Dienste bei der betroffenen (noch nicht initialisierten) Instanz erneut **Bereitstellen** – das Portal erzeugt den Stack dann mit eigenem Port neu. Bereits eingerichtete Instanzen laufen unverändert weiter. |
+| „Kein freier Port ab … gefunden“ | Das Portal prüft vor der Vergabe, ob ein Port auf dem Server frei ist. Mit `ss -ltnp` siehst du, was belegt ist; die Basis-Ports stehen in der `.env` (`WEB_PORT_BASIS`, `PAPERLESS_PORT_BASIS`, `OPENSLIDES_PORT_BASIS`, `OPENSLIDES_MANAGE_PORT_BASIS`). |
 | Seite zeigt „Not Found“ | Version < 0.7.0 oder Pfad falsch – `/admin/` aufrufen, `git pull` und Dienst neu starten |
 | Bereitstellung hängt bei 35 % und schlägt fehl | Logs des Web-Containers: `docker logs --tail 50 mandant-<kürzel>-web-1`; Protokoll der Instanz im Admin lesen |
 | `password authentication failed for user "mandant_…"` | Fehler in Version < 0.7.1. Nach `git pull` und Neustart der Dienste: `docker compose -p mandant-<kürzel> down -v`, dann erneut **Bereitstellen** |
 | Admin-Passwort der Instanz unbekannt | Aktion **Zugangsdaten anzeigen** bzw. **Admin-Passwort zurücksetzen** |
 | Nach `git pull` keine Wirkung | Dienste neu starten: `sudo systemctl restart portal-web portal-worker` (der Worker lädt Code nicht automatisch nach) |
+| Backup-Ziel zeigt „NICHT AKTIV“ / es landet nichts auf der Freigabe | Haken „aktiv“ im Backup-Ziel setzen und speichern (der Verbindungstest klappt auch ohne). Gesucht wird unter `<Freigabe>\<Unterordner>\<Kürzel>\`; `openslides` und `paperless` liegen darin in eigenen Ordnern |
+| „Upload zur Netzwerkfreigabe fehlgeschlagen“ | Status im Backup-Ziel lesen, „Speichern und Verbindung testen“ ausführen; prüfen: Server erreichbar (Port 445), Benutzer/Passwort, Schreibrecht auf der Freigabe, Platz. Solange das Ziel aktiv ist und der Upload scheitert, gilt die Sicherung nicht als aktuell und es wird nicht aktualisiert oder gelöscht |
+| „Update abgebrochen: Sicherung … fehlgeschlagen“ | Das Portal sichert vor dem Update auch Paperless und OpenSlides; deren Container müssen laufen. Den Grund nennt das Protokoll der Instanz. Starten bzw. reparieren, dann das Update wiederholen |
+| Paperless-Version „nicht ermittelt“ | Der Paperless-Container der Instanz läuft nicht oder antwortet nicht auf `docker compose exec`. Der Update-Hinweis nennt den Grund; nach dem Beheben „Erneut prüfen“ |
+| OpenSlides-Sicherung/-Update schlägt fehl | Das Portal erwartet im OpenSlides-Stack den Dienst `postgres` mit Benutzer und Datenbank `openslides` (Standard der Vorlage). Weicht deine Konfiguration ab, bitte von Hand sichern |
+| Instanz bleibt auf „In Arbeit“ stehen | Meist wurde der Worker währenddessen neu gestartet oder abgebrochen. Erst prüfen, was wirklich läuft (`docker ps`, Protokoll der Instanz). Dann den Status zurücksetzen: `./venv/bin/python manage.py shell -c "from apps.mandanten.models import MandantInstanz as M; M.objects.filter(kuerzel='<kürzel>').update(status='laeuft', fortschritt=0, schritt='')"` (statt `laeuft` ggf. `gestoppt`) |
 
 Dienste prüfen: `systemctl status portal-web portal-worker`, Logs: `journalctl -u portal-worker -e`.
-Status aller Instanzen: `./venv/bin/python manage.py mandant_status`.
+Status aller Instanzen: `./venv/bin/python manage.py mandant_status`. Alle Ereignisse mit Zeit und Benutzer: Admin › **Gesamtlog**.
 
 ## Manuelle Installation (ohne Installer)
 
@@ -153,21 +203,26 @@ git clone https://github.com/ricten/portalverwaltung_feuerix /opt/verein && cd /
 git clone https://github.com/ricten/Feuerix ../Feuerix
 python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
 cp .env.example .env     # alle Werte setzen, FEUERIX_REPO_PFAD=/opt/Feuerix, FIELD_ENCRYPTION_KEY erzeugen
-set -a; . ./.env; set +a
-./venv/bin/python manage.py migrate
+./venv/bin/python manage.py migrate              # manage.py liest die .env selbst
+./venv/bin/python manage.py collectstatic --noinput
 ./venv/bin/python manage.py createsuperuser
 ./venv/bin/celery -A config worker -l info --concurrency 2      # eigener Prozess/Dienst
 ./venv/bin/gunicorn config.wsgi --bind 127.0.0.1:8000           # eigener Prozess/Dienst
 ```
 
-Beispiel für eine systemd-Unit des Workers: [README.md](README.md#produktivbetrieb-beispiel-systemd). Postgres, Redis und
-Caddy müssen dann selbst bereitgestellt werden (`CADDY_ADMIN_URL` leer lassen, wenn der Proxy von Hand gepflegt wird).
+Beispiel für eine systemd-Unit des Workers: [README.md](README.md#produktivbetrieb). Postgres, Redis und Caddy müssen dann selbst
+bereitgestellt werden (`CADDY_ADMIN_URL` leer lassen, wenn der Proxy von Hand gepflegt wird). Den Online-Check (Abschnitt oben) bei Bedarf
+selbst als Timer oder Cron einrichten.
 
 ## Deinstallation
 
 ```bash
-sudo systemctl disable --now portal-web portal-worker && sudo rm /etc/systemd/system/portal-{web,worker}.service
+sudo systemctl disable --now portal-check.timer portal-web portal-worker
+sudo rm -f /etc/systemd/system/portal-{web,worker}.service /etc/systemd/system/portal-check.{service,timer}
+sudo systemctl daemon-reload
 docker rm -f portal-caddy portal-postgres portal-redis        # Daten bleiben in den Volumes portal-*
 ```
 
-Vereins-Instanzen vorher im Admin stilllegen (oder mit „Instanz ENDGÜLTIG löschen“ samt Abschlusssicherung entfernen) oder mit `manage.py mandant_abbauen <kürzel> [--daten-loeschen]` abbauen.
+Vereins-Instanzen vorher im Admin stilllegen oder mit **Instanz ENDGÜLTIG löschen** (samt Abschlusssicherung) entfernen, oder auf der
+Kommandozeile mit `manage.py mandant_abbauen <kürzel> [--daten-loeschen]`. Archivierte gelöschte Instanzen liegen in
+`instanzen/_geloescht/` und werden nie automatisch entfernt.
