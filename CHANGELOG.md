@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.25.1 (2026-10-10)
+- Das Backup-Ziel zeigt jetzt oben seinen **Status**: „NICHT AKTIV - es wird nichts hochgeladen“ (häufigster Grund, warum nichts auf
+  der Freigabe landet: der Haken „aktiv“ fehlt, auch wenn der Verbindungstest klappt), sonst Server/Freigabe, Erreichbarkeit und
+  der **letzte Upload** mit Zeit und Ordner. Eine Sicherung bei eingerichtetem, aber inaktivem Ziel schreibt einen Hinweis ins
+  Protokoll. Migration 0016.
+
 ## 0.25.0 (2026-10-10)
 - Neu: **Jedes Instanz-Update sichert jetzt auch die Zusatzdienste.** Neben der Feuerix-Sicherung legt das Portal vor dem Update
   (Einzel-Knopf, Admin-Aktion, Gesamt-Rollout) einen Paperless-Export und einen OpenSlides-Dump an, sofern der Dienst

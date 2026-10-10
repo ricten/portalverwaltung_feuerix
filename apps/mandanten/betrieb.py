@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
-from .models import MandantInstanz
+from .models import BackupZiel, MandantInstanz
 
 
 def _ausgangsstatus(mandant):
@@ -48,6 +48,11 @@ def _backup(mandant):
     ziel = basis.instanz_verzeichnis(mandant, "backups")
     basis.docker(compose + ["cp", "web:/data/backups/.", str(ziel)], "Sicherung herauskopieren", timeout=3600)
     mandant.protokollieren(f"Sicherung erstellt und nach {ziel} kopiert.")
+    if not backupziel.aktuell():
+        eingerichtet = BackupZiel.objects.filter(pk=1).exclude(server="").first()
+        if eingerichtet:
+            mandant.protokollieren("Hinweis: Das Backup-Ziel ist eingerichtet, aber NICHT aktiv - die Sicherung liegt nur "
+                                   "lokal. Im Admin unter „Backup-Ziel“ den Haken „aktiv“ setzen und speichern.")
     if backupziel.aktuell():
         try:
             neu = backupziel.hochladen(mandant, ziel)

@@ -283,6 +283,8 @@ class BackupZiel(models.Model):
     online = models.BooleanField("Erreichbar (letzter Check)", null=True, blank=True, editable=False)
     online_geprueft_am = models.DateTimeField("Zuletzt geprüft", null=True, blank=True, editable=False)
     online_fehler = models.CharField("Fehler des letzten Checks", max_length=500, blank=True, editable=False)
+    letzter_upload_am = models.DateTimeField("Letzter Upload", null=True, blank=True, editable=False)
+    letzter_upload_text = models.CharField("Letzter Upload (Details)", max_length=255, blank=True, editable=False)
     offline_seit = models.DateTimeField(null=True, blank=True, editable=False)
     offline_mail_gesendet = models.BooleanField(default=False, editable=False)
 

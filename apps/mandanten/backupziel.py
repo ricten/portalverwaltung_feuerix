@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from django.utils import timezone as django_zeit
+
 from .basis import BereitstellungsFehler
 from .models import BackupZiel
 
@@ -112,4 +114,7 @@ def hochladen(mandant, lokaler_ordner, unterordner="", rekursiv=False):
         raise
     except Exception as e:
         raise _fehler("Upload zur Netzwerkfreigabe", e)
+    ort = ntpath.join(mandant.kuerzel, *teile)
+    BackupZiel.objects.filter(pk=1).update(letzter_upload_am=django_zeit.now(),
+                                           letzter_upload_text=f"{ort}: {neu} neue Datei(en)"[:255])
     return neu

@@ -490,8 +490,29 @@ class BackupZielForm(forms.ModelForm):
 class BackupZielAdmin(admin.ModelAdmin):
     """Eine einzige Einstellung: die Liste fuehrt direkt zum Formular."""
     form = BackupZielForm
-    fields = ["aktiv", "server", "freigabe", "unterordner", "benutzer", "passwort_neu", "aufbewahrung_tage",
-              "lokal_loeschen"]
+    fields = ["status_anzeige", "aktiv", "server", "freigabe", "unterordner", "benutzer", "passwort_neu",
+              "aufbewahrung_tage", "lokal_loeschen"]
+    readonly_fields = ["status_anzeige"]
+
+    @admin.display(description="Status")
+    def status_anzeige(self, obj):
+        """Sagt klar, ob Sicherungen wirklich hochgeladen werden - und wann zuletzt."""
+        if not obj or not obj.server:
+            return "Noch nicht eingerichtet."
+        if not obj.aktiv:
+            return mark_safe('<strong style="color:#c62828">NICHT AKTIV - es wird nichts hochgeladen.</strong> '
+                             "Haken „Sicherungen auf Netzwerkfreigabe ablegen“ setzen und speichern.")
+        zeilen = [format_html('<strong style="color:#2e7d32">Aktiv.</strong> Neue Sicherungen werden nach '
+                              "<code>\\\\{}\\{}</code> hochgeladen.", obj.server, obj.freigabe)]
+        if obj.online is False:
+            zeilen.append(format_html('<span style="color:#c62828">Nicht erreichbar ({}): {}</span>',
+                                      obj.online_geprueft_am.strftime("%d.%m. %H:%M") if obj.online_geprueft_am else "?",
+                                      obj.online_fehler))
+        elif obj.online:
+            zeilen.append(format_html("Erreichbar (geprüft {}).", obj.online_geprueft_am.strftime("%d.%m. %H:%M")))
+        zeilen.append(format_html("Letzter Upload: {}.", f"{obj.letzter_upload_am:%d.%m.%Y %H:%M} - {obj.letzter_upload_text}"
+                                  if obj.letzter_upload_am else "noch keiner"))
+        return format_html("<br>".join("{}" for _ in zeilen), *zeilen)
 
     def has_add_permission(self, request):
         return False

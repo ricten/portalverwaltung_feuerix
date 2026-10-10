@@ -420,3 +420,71 @@ class ZusatzsicherungenTests(TestCase):
             (Path(tmp) / "b1" / "openslides").mkdir(parents=True)
             dienstupdate.openslides_dump(m, "4.3.0")
         smb.assert_not_called()
+
+
+class SichtbarkeitTests(TestCase):
+    """Das Portal sagt klar, ob und wohin hochgeladen wird."""
+
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_superuser("sb", "s@example.org", "pw"))
+        self.url = self.client.get("/admin/mandanten/backupziel/").url
+
+    def test_status_nicht_eingerichtet_nicht_aktiv_und_aktiv(self):
+        self.assertContains(self.client.get(self.url), "Noch nicht eingerichtet")
+        _ziel(aktiv=False)
+        antwort = self.client.get(self.url)
+        self.assertContains(antwort, "NICHT AKTIV")
+        self.assertContains(antwort, "es wird nichts hochgeladen")
+        _ziel(aktiv=True)
+        antwort = self.client.get(self.url)
+        self.assertContains(antwort, "Aktiv.")
+        self.assertContains(antwort, "nas.local")
+        self.assertContains(antwort, "noch keiner")
+
+    def test_letzter_upload_und_erreichbarkeit_werden_angezeigt(self):
+        _ziel()
+        m = _m()
+        with tempfile.TemporaryDirectory() as tmp, patch("apps.mandanten.backupziel._smb", return_value=FakeSMB()):
+            (Path(tmp) / "a.sql").write_text("x")
+            backupziel.hochladen(m, Path(tmp), "openslides")
+        ziel = BackupZiel.holen()
+        self.assertIn("b1\\openslides: 1 neue Datei(en)", ziel.letzter_upload_text)
+        self.assertContains(self.client.get(self.url), "b1\\openslides: 1 neue Datei(en)")
+        BackupZiel.objects.filter(pk=1).update(online=False, online_fehler="Host weg",
+                                               online_geprueft_am=timezone.now())
+        self.assertContains(self.client.get(self.url), "Nicht erreichbar")
+
+    def test_sicherung_bei_eingerichtetem_aber_inaktivem_ziel_schreibt_einen_hinweis(self):
+        _ziel(aktiv=False)
+        m = _m()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp, FEUERIX_REPO_PFAD=tmp):
+            (Path(tmp) / "docker-compose.yml").write_text("services: {}\n")
+            (Path(tmp) / m.kuerzel).mkdir()
+            (Path(tmp) / m.kuerzel / ".env").write_text("A=b\n")
+
+            def docker(befehl, *a, **k):
+                if "cp" in befehl:
+                    Path(befehl[-1]).mkdir(parents=True, exist_ok=True)
+                return ""
+
+            with patch("apps.mandanten.betrieb.basis.docker", side_effect=docker):
+                betrieb.backup(m)
+        m.refresh_from_db()
+        self.assertIn("NICHT aktiv", m.protokoll)
+
+    def test_ohne_eingerichtetes_ziel_kein_hinweis(self):
+        m = _m()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp, FEUERIX_REPO_PFAD=tmp):
+            (Path(tmp) / "docker-compose.yml").write_text("services: {}\n")
+            (Path(tmp) / m.kuerzel).mkdir()
+            (Path(tmp) / m.kuerzel / ".env").write_text("A=b\n")
+
+            def docker(befehl, *a, **k):
+                if "cp" in befehl:
+                    Path(befehl[-1]).mkdir(parents=True, exist_ok=True)
+                return ""
+
+            with patch("apps.mandanten.betrieb.basis.docker", side_effect=docker):
+                betrieb.backup(m)
+        m.refresh_from_db()
+        self.assertNotIn("NICHT aktiv", m.protokoll)
