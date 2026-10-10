@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.26.1 (2026-10-10)
+- Fix: Die Aktion **„Sichern“** (und `manage.py mandant_backup`) sichert jetzt **alle** Dienste der Instanz: Feuerix (Datenbank,
+  Medien) plus - falls eingerichtet - den Paperless-Export und den OpenSlides-Datenbank-Dump, bei aktivem Backup-Ziel jeweils auch
+  auf der Netzwerkfreigabe (`<kürzel>\`, `<kürzel>\openslides\`, `<kürzel>\paperless\`). Bisher entstanden die beiden nur bei
+  Updates und vor dem Löschen. Schlägt ein Zusatzdienst fehl, werden die anderen trotzdem gesichert und alle Fehler gemeldet
+  (Protokoll, auf Wunsch Mail).
+
 ## 0.26.0 (2026-10-10)
 - Neu: **Instanz aus einer Sicherung wiederherstellen** (Admin-Aktion „Aus Sicherung wiederherstellen …“, nur Superuser, Kürzel eintippen).
   Die Seite listet alle Sicherungen der Instanz (lokal und auf der Netzwerkfreigabe, mit Zeitpunkt, Herkunft und Größe). Ablauf: Instanz

@@ -61,7 +61,7 @@ def mandant_wiederherstellen_task(mandant_id, stamp, mit_medien=True, vorher_sic
 
 @shared_task
 def mandant_backup_task(mandant_id):
-    _ausfuehren(betrieb.backup, mandant_id, protokollieren=True)
+    _ausfuehren(betrieb.vollsicherung, mandant_id, protokollieren=True)
 
 
 @shared_task

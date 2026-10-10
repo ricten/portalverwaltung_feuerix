@@ -466,7 +466,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             return None
         return HttpResponseRedirect(reverse("admin:mandanten_loeschen", args=[queryset.first().pk]))
 
-    @admin.action(description="Datenbank und Medien sichern")
+    @admin.action(description="Sichern (Feuerix, Paperless, OpenSlides)")
     def sichern(self, request, queryset):
         self._starten(request, queryset, tasks.mandant_backup_task, "Sicherung")
 

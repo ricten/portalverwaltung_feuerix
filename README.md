@@ -73,8 +73,10 @@ Aktuell automatisiert:
     5 Minuten) prüft Instanzen und Backup-Ziel, speichert „offline seit“, protokolliert Wechsel und zeigt Ausfälle als roten
     Hinweis im Admin.
   - `python manage.py mandant_status` – Status/Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring/Cron)
-  - `python manage.py mandant_backup [kürzel]` – Feuerix' `backup.sh` im Container, Ergebnis wird nach
-    `INSTANZEN_VERZEICHNIS/<kürzel>/backups` kopiert (Paperless/OpenSlides-Daten: Volumes separat sichern)
+  - `python manage.py mandant_backup [kürzel]` – vollständige Sicherung: Feuerix' `backup.sh` im Container (Ergebnis wird nach
+    `INSTANZEN_VERZEICHNIS/<kürzel>/backups` kopiert), dazu bei eingerichteten Zusatzdiensten der Paperless-Export
+    (`<kürzel>/paperless/export`) und der OpenSlides-Dump (`<kürzel>/openslides/backups`); mit aktivem Backup-Ziel liegt alles auch
+    auf der Freigabe. Das Gleiche macht die Admin-Aktion „Sichern“. Die Docker-Volumes selbst werden nicht kopiert.
   - **Update-Hinweis und Rollout**: Das Portal prüft im Hintergrund (`UPDATE_PRUEFUNG_STUNDEN`, Standard 6, 0 = aus), ob
     der Feuerix-Checkout hinter dem Remote zurückliegt, und zeigt dann auf der Startseite und in der Instanzliste die neue
     Version, die Änderungen und die veralteten Instanzen. **„Update jetzt ausrollen“** (nur auf Klick) macht `git pull

@@ -6,7 +6,8 @@ from apps.mandanten.models import MandantInstanz
 
 
 class Command(BaseCommand):
-    help = "Sichert Datenbank und Medien einer laufenden Instanz (ohne Kürzel: aller laufenden Instanzen)."
+    help = ("Vollständige Sicherung einer laufenden Instanz: Feuerix (Datenbank, Medien) sowie Paperless-Export und "
+            "OpenSlides-Dump, falls eingerichtet (ohne Kürzel: aller laufenden Instanzen).")
 
     def add_arguments(self, parser):
         parser.add_argument("kuerzel", nargs="?")
@@ -20,7 +21,7 @@ class Command(BaseCommand):
         fehler = 0
         for m in mandanten:
             try:
-                ziel = betrieb.backup(m)
+                ziel = betrieb.vollsicherung(m)
                 self.stdout.write(self.style.SUCCESS(f"{m.kuerzel}: gesichert nach {ziel}"))
             except BereitstellungsFehler as e:
                 fehler += 1

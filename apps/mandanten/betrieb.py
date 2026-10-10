@@ -38,6 +38,35 @@ def backup(mandant, _pruefen=True):
         raise
 
 
+def vollsicherung(mandant):
+    """Vollstaendige Sicherung einer laufenden Instanz: Feuerix (Datenbank und Medien) PLUS - falls eingerichtet - der
+    Paperless-Export und der OpenSlides-Datenbank-Dump, jeweils (bei aktivem Backup-Ziel) auch auf der Netzwerkfreigabe.
+    Ein Fehler bei einem Zusatzdienst verhindert die anderen nicht; am Ende werden alle Fehler gemeldet.
+    -> Ordner der Feuerix-Sicherung."""
+    from . import dienstupdate, dienstversionen, endsicherung      # erst hier: endsicherung -> ... -> betrieb
+    ziel = backup(mandant)
+    fehler = []
+    if endsicherung._paperless_vorhanden(mandant):
+        try:
+            dienstupdate.paperless_export(mandant, "Paperless: Export")
+        except BereitstellungsFehler as e:
+            fehler.append(f"Paperless: {str(e).splitlines()[0][:300]}")
+    if endsicherung._openslides_vorhanden(mandant):
+        try:
+            dienstupdate.openslides_dump(mandant, dienstversionen.openslides_konfiguriert(mandant) or "unbekannt",
+                                         "OpenSlides: Datenbank-Dump")
+        except BereitstellungsFehler as e:
+            fehler.append(f"OpenSlides: {str(e).splitlines()[0][:300]}")
+    if fehler:
+        text = "; ".join(fehler)
+        mandant.protokollieren(f"Sicherung der Zusatzdienste unvollständig: {text}")
+        benachrichtigung.senden("backup", f"Sicherung der Zusatzdienste von {mandant.kuerzel} fehlgeschlagen",
+                                f"Die Feuerix-Sicherung der Instanz {mandant.verein_name} ({mandant.kuerzel}) war erfolgreich, "
+                                f"aber:\n\n{text}")
+        raise BereitstellungsFehler(f"Feuerix gesichert, aber: {text}")
+    return ziel
+
+
 def _backup(mandant):
     """Sichert Datenbank und Medien ueber Feuerix' scripts/backup.sh und kopiert die Sicherungen aus dem
     Container nach `<instanz>/backups` (eine Sicherung im selben Volume waere bei Datenverlust mit weg).
