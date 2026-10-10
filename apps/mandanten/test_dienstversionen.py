@@ -11,6 +11,7 @@ from django.core.mail import get_connection
 from django.test import TestCase, override_settings
 
 from . import dienstversionen, updates
+from .basis import BereitstellungsFehler
 from .models import Benachrichtigung, LogEintrag, MandantInstanz, UpdateZustand
 from .test_updates import _git_antworten
 
@@ -45,23 +46,57 @@ def _github(paperless="v2.15.0", openslides="4.3.1"):
 
 
 class ErfassenTests(TestCase):
-    def test_paperless_version_aus_dem_header(self):
-        with patch("apps.mandanten.dienstversionen.urllib.request.urlopen",
-                   return_value=_antwort({"X-Version": "2.14.7"})):
-            self.assertEqual(dienstversionen.paperless_laufend(_m()), "2.14.7")
+    def _docker(self, ausgabe=None, fehler=None):
+        def docker(befehl, was, **kw):
+            if fehler:
+                raise BereitstellungsFehler(fehler)
+            docker.befehl = befehl
+            return ausgabe
+        return docker
 
-    def test_paperless_header_auch_bei_401(self):
-        fehler = urllib.error.HTTPError("u", 401, "Unauthorized", {"X-Version": "v2.13.0"}, io.BytesIO(b""))
-        with patch("apps.mandanten.dienstversionen.urllib.request.urlopen", side_effect=fehler):
-            self.assertEqual(dienstversionen.paperless_laufend(_m()), "2.13.0")
-
-    def test_paperless_nicht_erreichbar_oder_ohne_header(self):
+    def test_paperless_version_aus_dem_container(self):
         m = _m()
-        with patch("apps.mandanten.dienstversionen.urllib.request.urlopen",
-                   side_effect=urllib.error.URLError("weg")):
-            self.assertEqual(dienstversionen.paperless_laufend(m), "")
-        with patch("apps.mandanten.dienstversionen.urllib.request.urlopen", return_value=_antwort({})):
-            self.assertEqual(dienstversionen.paperless_laufend(m), "")
+        docker = self._docker("2.14.7\n")
+        with patch("apps.mandanten.dienstversionen.paperless._compose_basis", return_value=(["docker", "compose"], Path("."))), \
+             patch("apps.mandanten.dienstversionen.basis.docker", side_effect=docker):
+            self.assertEqual(dienstversionen.paperless_laufend(m), "2.14.7")
+        self.assertEqual(docker.befehl[-4:-1], ["webserver", "python3", "-c"])
+        self.assertIn("__full_version_str__", docker.befehl[-1])
+
+    def test_ausgabe_mit_warnzeilen_und_fuehrendem_v(self):
+        m = _m()
+        with patch("apps.mandanten.dienstversionen.paperless._compose_basis", return_value=(["docker"], Path("."))), \
+             patch("apps.mandanten.dienstversionen.basis.docker", side_effect=self._docker("WARN irgendwas\nv3.2.1\n")):
+            self.assertEqual(dienstversionen.paperless_laufend(m), "3.2.1")
+
+    def test_unerwartete_ausgabe_und_dockerfehler_sind_fehler_mit_grund(self):
+        m = _m()
+        with patch("apps.mandanten.dienstversionen.paperless._compose_basis", return_value=(["docker"], Path("."))):
+            with patch("apps.mandanten.dienstversionen.basis.docker", side_effect=self._docker("Traceback ...")):
+                with self.assertRaises(BereitstellungsFehler):
+                    dienstversionen.paperless_laufend(m)
+            with patch("apps.mandanten.dienstversionen.basis.docker", side_effect=self._docker(fehler="Container läuft nicht")):
+                with self.assertRaises(BereitstellungsFehler):
+                    dienstversionen.paperless_laufend(m)
+
+    def test_erfassen_sammelt_den_grund_und_stoert_nicht(self):
+        m = _m()
+        gruende = []
+        with patch("apps.mandanten.dienstversionen.paperless_laufend",
+                   side_effect=BereitstellungsFehler("Container läuft nicht")):
+            dienstversionen.erfassen(m, gruende)
+        self.assertEqual(gruende, ["d1: Container läuft nicht"])
+        m.refresh_from_db()
+        self.assertEqual(m.paperless_version, "")
+
+    def test_pruefen_zeigt_den_grund_im_hinweis_der_zusatzdienste(self):
+        m = _m()
+        z = UpdateZustand.holen()
+        with patch("apps.mandanten.dienstversionen.paperless_laufend",
+                   side_effect=BereitstellungsFehler("Container läuft nicht")), \
+             patch("apps.mandanten.dienstversionen._json_holen", side_effect=_github()):
+            dienstversionen.pruefen(z)
+        self.assertIn("d1: Container läuft nicht", z.dienste_fehler)
 
     def test_openslides_version_aus_der_config(self):
         m = _m()

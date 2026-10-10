@@ -1,6 +1,6 @@
 # Version
 
-**0.24.1**
+**0.24.2**
 
 Die Versionsnummer der Portalverwaltung selbst (nicht die von Feuerix - die steht in dessen `VERSION`).
 Semantic Versioning: neue Funktion = Minor, Fehlerbehebung = Patch, inkompatible Änderung (z. B. an der `.env`

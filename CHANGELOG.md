@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.24.2 (2026-10-10)
+- Fix: Die **Paperless-Version wurde nie angezeigt** (und der Update-Pfeil fehlte), weil Paperless den Header `X-Version` nur an
+  angemeldete Benutzer sendet - die anonyme Abfrage des Portals bekam ihn nie. Die Version wird jetzt direkt aus dem
+  Paperless-Container gelesen (`docker compose exec webserver python3 …paperless.version`), ohne Zugangsdaten. Kann sie
+  nicht ermittelt werden, nennt der Hinweis im Admin den Grund (z. B. „Container läuft nicht“).
+
 ## 0.24.1 (2026-10-10)
 - Fix: Mit aktivem Backup-Ziel wurden nur die Feuerix-Sicherungen auf die Netzwerkfreigabe hochgeladen. Jetzt landen auch der
   **OpenSlides-Datenbank-Dump** (`<Freigabe>\<kürzel>\openslides\`) und der **Paperless-Export**

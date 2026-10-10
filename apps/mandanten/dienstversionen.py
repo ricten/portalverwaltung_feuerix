@@ -9,7 +9,8 @@ from pathlib import Path
 
 from django.conf import settings
 
-from . import benachrichtigung, gesamtlog, paperless
+from . import basis, benachrichtigung, gesamtlog, paperless
+from .basis import BereitstellungsFehler
 from .models import MandantInstanz
 
 RELEASES = {
@@ -32,19 +33,21 @@ def neueste_version(dienst):
     return tag.lstrip("vV").strip()[:30]
 
 
-def paperless_laufend(mandant, timeout=8):
-    """Version einer laufenden Paperless-Instanz aus dem Antwort-Header `X-Version` (Paperless-ngx setzt ihn auf API-
-    Antworten, auch auf 401/403). Leer, wenn nicht erreichbar oder der Header fehlt."""
-    if not (mandant.paperless_domain and mandant.paperless_port):
-        return ""
-    try:
-        with urllib.request.urlopen(paperless._anfrage(mandant, "/api/"), timeout=timeout) as antwort:
-            kopf = antwort.headers
-    except urllib.error.HTTPError as e:
-        kopf = e.headers
-    except (urllib.error.URLError, ConnectionError, TimeoutError, OSError):
-        return ""
-    return (kopf.get("X-Version") or "").lstrip("vV").strip()[:30]
+_PAPERLESS_VERSION = "from paperless import version; print(version.__full_version_str__)"
+
+
+def paperless_laufend(mandant, timeout=60):
+    """Version der laufenden Paperless-Instanz, direkt aus dem Container gelesen (`paperless.version`). Der Header
+    `X-Version` taugt nicht: Paperless sendet ihn nur an angemeldete Benutzer. Wirft BereitstellungsFehler, wenn die
+    Version nicht ermittelt werden kann (Container laeuft nicht, Ausgabe unerwartet)."""
+    befehl, cwd = paperless._compose_basis(mandant)
+    ausgabe = basis.docker(befehl + ["exec", "-T", "webserver", "python3", "-c", _PAPERLESS_VERSION],
+                           "Paperless: Version lesen", timeout=timeout, cwd=cwd)
+    zeilen = [z.strip() for z in ausgabe.splitlines() if z.strip()]
+    treffer = re.fullmatch(r"v?(\d+\.\d+\.\d+)", zeilen[-1]) if zeilen else None
+    if not treffer:
+        raise BereitstellungsFehler(f"Paperless: unerwartete Versionsausgabe: {ausgabe.strip()[:100]!r}")
+    return treffer.group(1)
 
 
 def openslides_konfiguriert(mandant):
@@ -66,11 +69,17 @@ def openslides_konfiguriert(mandant):
     return treffer.group(1).lstrip("vV")[:30] if treffer else ""
 
 
-def erfassen(mandant):
-    """Aktualisiert paperless_version/openslides_version einer Instanz (nur wenn der Dienst eingerichtet ist)."""
+def erfassen(mandant, fehler=None):
+    """Aktualisiert paperless_version/openslides_version einer Instanz (nur wenn der Dienst eingerichtet ist).
+    Gruende, warum eine Version nicht ermittelt werden konnte, werden an die Liste `fehler` angehaengt."""
     geaendert = []
     if mandant.paperless_domain and mandant.status in ("laeuft", "wird_bereitgestellt"):
-        v = paperless_laufend(mandant)
+        try:
+            v = paperless_laufend(mandant)
+        except BereitstellungsFehler as e:
+            v = ""
+            if fehler is not None:
+                fehler.append(f"{mandant.kuerzel}: {str(e).splitlines()[0][:120]}")
         if v and v != mandant.paperless_version:
             mandant.paperless_version = v
             geaendert.append("paperless_version")
@@ -91,16 +100,16 @@ def erfassen_sicher(mandant):
         pass
 
 
-def instanzen_erfassen():
+def instanzen_erfassen(fehler=None):
     for m in MandantInstanz.objects.exclude(status__in=("neu", "geloescht")):
-        erfassen(m)
+        erfassen(m, fehler)
 
 
 def pruefen(zustand):
     """Erfasst die laufenden Versionen, holt die neuesten von GitHub und meldet Neues (Gesamtlog, Mail - je Version
     einmal). Aendert nur `zustand` (der Aufrufer speichert) und die Instanzfelder."""
-    instanzen_erfassen()
     fehler = []
+    instanzen_erfassen(fehler)
     for dienst in ("paperless", "openslides"):
         feld = f"{dienst}_neueste"
         try:
