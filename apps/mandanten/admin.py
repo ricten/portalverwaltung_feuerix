@@ -271,8 +271,9 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             frage = (f"{obj.kuerzel} ist gestoppt. Auf Feuerix {ziel} aktualisieren? Es wird nur das Image gebaut, "
                      "die Instanz bleibt gestoppt und wird beim nächsten Start aktualisiert.")
         else:
-            frage += (" Die letzte Sicherung ist aktuell." if obj.sicherung_aktuell
-                      else " Es gibt keine aktuelle Sicherung - sie wird vorher automatisch angelegt.")
+            frage += (" Alle Sicherungen (Feuerix und Zusatzdienste) sind aktuell." if obj.alle_sicherungen_aktuell
+                      else " Fehlende oder veraltete Sicherungen (Feuerix, Paperless, OpenSlides) werden vorher "
+                           "automatisch angelegt.")
         return format_html(
             '<span>{}</span> <button type="button" class="pv-knopf pv-update-einzeln" data-url="{}" '
             'data-frage="{}" title="Auf {} aktualisieren" aria-label="Aktualisieren">'

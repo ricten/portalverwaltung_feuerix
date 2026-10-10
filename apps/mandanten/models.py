@@ -82,6 +82,8 @@ class MandantInstanz(models.Model):
                                        editable=False)
 
     sicherung_am = models.DateTimeField("Letzte erfolgreiche Sicherung", null=True, blank=True, editable=False)
+    paperless_sicherung_am = models.DateTimeField("Letzte Paperless-Sicherung", null=True, blank=True, editable=False)
+    openslides_sicherung_am = models.DateTimeField("Letzte OpenSlides-Sicherung", null=True, blank=True, editable=False)
     paperless_version = models.CharField("Paperless-ngx-Version", max_length=30, blank=True, editable=False)
     openslides_version = models.CharField("OpenSlides-Version", max_length=30, blank=True, editable=False)
 
@@ -129,6 +131,24 @@ class MandantInstanz(models.Model):
         from django.conf import settings
         letzte = self.letzte_sicherung
         return bool(letzte and timezone.now() - letzte <= timedelta(hours=settings.UPDATE_BACKUP_MAX_ALTER_STUNDEN))
+
+    @property
+    def zusatz_sicherungen_aktuell(self):
+        """True, wenn fuer jeden eingerichteten Zusatzdienst (Paperless, OpenSlides) eine Sicherung juenger als
+        UPDATE_BACKUP_MAX_ALTER_STUNDEN existiert (Export bzw. Dump, bei aktivem Backup-Ziel erst nach dem Upload)."""
+        from datetime import timedelta
+
+        from django.conf import settings
+        grenze = timezone.now() - timedelta(hours=settings.UPDATE_BACKUP_MAX_ALTER_STUNDEN)
+        for domain, port, zeit in ((self.paperless_domain, self.paperless_port, self.paperless_sicherung_am),
+                                   (self.openslides_domain, self.openslides_port, self.openslides_sicherung_am)):
+            if domain and port and not (zeit and zeit >= grenze):
+                return False
+        return True
+
+    @property
+    def alle_sicherungen_aktuell(self):
+        return self.sicherung_aktuell and self.zusatz_sicherungen_aktuell
 
     def protokollieren(self, text, benutzer=""):
         """Haengt eine Zeile an das Protokoll der Instanz an und schreibt sie zusaetzlich in den Gesamtlog."""

@@ -154,7 +154,7 @@ def ausrollen(pause_sekunden=None):
         for nr, mandant in enumerate(ziele, 1):
             schritt(f"Instanz {nr} von {len(ziele)}: {mandant.kuerzel}"
                    + (" (gestoppt: nur Image bauen)" if mandant.status == "gestoppt"
-                      else "" if mandant.sicherung_aktuell else " (Sicherung, dann Update)"))
+                      else "" if mandant.alle_sicherungen_aktuell else " (Sicherung, dann Update)"))
             try:
                 betrieb.update_mit_sicherung(mandant)
                 ok.append(mandant.kuerzel)

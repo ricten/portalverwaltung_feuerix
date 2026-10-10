@@ -6,10 +6,11 @@ Paperless-ngx (Export mit document_exporter) und OpenSlides (Datenbank-Dump). De
 Schluesseln, die zum Entschluesseln der Sicherung noetig sind) wird nach dem Loeschen der Volumes nach
 `<INSTANZEN_VERZEICHNIS>/_geloescht/<kuerzel>-<Zeitstempel>` verschoben und nie automatisch entfernt."""
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from django.conf import settings
+from django.utils import timezone
 
 from . import basis, betrieb, dienstupdate, dienstversionen, openslides, paperless, provisioning
 from .basis import BereitstellungsFehler
@@ -53,6 +54,25 @@ def abschlusssicherung(mandant):
                                      "OpenSlides: Datenbank-Dump vor dem Löschen")
         gesichert.append("OpenSlides")
     mandant.protokollieren("Abschlusssicherung vollständig (" + ", ".join(gesichert) + ") - Daten werden jetzt gelöscht.")
+
+
+def zusatzdienste_sichern(mandant, prozent=20):
+    """Sichert Paperless (Export) und OpenSlides (Dump), sofern eingerichtet, laufend und deren letzte Sicherung aelter
+    als UPDATE_BACKUP_MAX_ALTER_STUNDEN ist - fuer jedes Instanz-Update, damit auch die Zusatzdienste einen
+    frischen Stand haben. Wirft BereitstellungsFehler, wenn eine Sicherung fehlschlaegt."""
+    jetzt = timezone.now()
+    grenze = timedelta(hours=settings.UPDATE_BACKUP_MAX_ALTER_STUNDEN)
+
+    def veraltet(zeit):
+        return not (zeit and jetzt - zeit <= grenze)
+
+    if _paperless_vorhanden(mandant) and veraltet(mandant.paperless_sicherung_am):
+        basis.fortschritt(mandant, prozent, "Update: Paperless exportieren (keine aktuelle Sicherung)")
+        dienstupdate.paperless_export(mandant, "Paperless: Export vor dem Update")
+    if _openslides_vorhanden(mandant) and veraltet(mandant.openslides_sicherung_am):
+        basis.fortschritt(mandant, prozent + 10, "Update: OpenSlides sichern (keine aktuelle Sicherung)")
+        dienstupdate.openslides_dump(mandant, dienstversionen.openslides_konfiguriert(mandant) or "unbekannt",
+                                     "OpenSlides: Datenbank-Dump vor dem Update")
 
 
 def archiv_verzeichnis():

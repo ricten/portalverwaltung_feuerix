@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.25.0 (2026-10-10)
+- Neu: **Jedes Instanz-Update sichert jetzt auch die Zusatzdienste.** Neben der Feuerix-Sicherung legt das Portal vor dem Update
+  (Einzel-Knopf, Admin-Aktion, Gesamt-Rollout) einen Paperless-Export und einen OpenSlides-Dump an, sofern der Dienst
+  eingerichtet ist und seine letzte Sicherung älter als `UPDATE_BACKUP_MAX_ALTER_STUNDEN` (Standard 24) ist. Ein Fehler dabei
+  bricht das Update ab (Instanz läuft unverändert weiter). Bei aktivem Backup-Ziel gilt auch das erst nach erfolgreichem
+  Upload als aktuell. Der Update-Hinweis zeigt „Sicherungen aktuell“ bzw. „werden vorher angelegt“ für alle Dienste.
+- Datenbank-Migration 0015.
+
 ## 0.24.2 (2026-10-10)
 - Fix: Die **Paperless-Version wurde nie angezeigt** (und der Update-Pfeil fehlte), weil Paperless den Header `X-Version` nur an
   angemeldete Benutzer sendet - die anonyme Abfrage des Portals bekam ihn nie. Die Version wird jetzt direkt aus dem

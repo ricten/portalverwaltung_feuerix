@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
+from django.utils import timezone
 
 from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless
 from .basis import WARTESCHLANGE_DIENST, BereitstellungsFehler
@@ -44,6 +45,8 @@ def paperless_export(mandant, bezeichnung="Paperless: Export vor dem Update"):
     pfad = paperless._verzeichnis(mandant) / "export"
     mandant.protokollieren(f"Paperless-Export angelegt in {pfad}.")
     _auf_freigabe(mandant, pfad, "paperless", rekursiv=True)
+    mandant.paperless_sicherung_am = timezone.now()
+    mandant.save(update_fields=["paperless_sicherung_am"])
     return pfad
 
 
@@ -61,6 +64,8 @@ def openslides_dump(mandant, markierung, bezeichnung="OpenSlides: Datenbank-Dump
     datei.write_text(dump, encoding="utf-8")
     mandant.protokollieren(f"OpenSlides-Datenbank gesichert in {datei}.")
     _auf_freigabe(mandant, ziel, "openslides")
+    mandant.openslides_sicherung_am = timezone.now()
+    mandant.save(update_fields=["openslides_sicherung_am"])
     return datei
 
 

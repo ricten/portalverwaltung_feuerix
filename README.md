@@ -77,9 +77,9 @@ Aktuell automatisiert:
     Version, die Änderungen und die veralteten Instanzen. **„Update jetzt ausrollen“** (nur auf Klick) macht `git pull
     --ff-only` und aktualisiert alle laufenden, noch nicht aktuellen Instanzen nacheinander (Pause
     `UPDATE_PAUSE_SEKUNDEN`); ein Fehler bei einer Instanz stoppt die übrigen nicht. Kommandozeile:
-    `python manage.py mandant_update_pruefen [--ausrollen]`. **Vor jedem Update** wird geprüft, ob die letzte Sicherung der
-    Instanz jünger als `UPDATE_BACKUP_MAX_ALTER_STUNDEN` (Standard 24) ist - sonst legt das Portal automatisch eine an
-    (schlägt das fehl, wird nicht aktualisiert). Bei einer veralteten Instanz zeigt die Spalte „Version“ einen eigenen
+    `python manage.py mandant_update_pruefen [--ausrollen]`. **Vor jedem Update** wird geprüft, ob die letzten Sicherungen der
+    Instanz (Feuerix, Paperless-Export, OpenSlides-Dump) jünger als `UPDATE_BACKUP_MAX_ALTER_STUNDEN` (Standard 24) sind - sonst
+    legt das Portal automatisch neue an (schlägt das fehl, wird nicht aktualisiert). Bei einer veralteten Instanz zeigt die Spalte „Version“ einen eigenen
     Update-Knopf. **Gestoppte Instanzen** zählen mit (ihre Version bleibt gespeichert): Das Update baut für sie nur das
     neue Image und lässt sie gestoppt; stillgelegte werden nicht beachtet. Das Portal selbst aktualisiert sich nicht über die Weboberfläche (`git pull` und Neustart bleiben Handarbeit,
     siehe INSTALL.md).

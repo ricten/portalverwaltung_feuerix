@@ -175,8 +175,9 @@ def neustarten(mandant):
 
 def update_mit_sicherung(mandant, vorher=None):
     """Aktualisiert eine Instanz mit sichtbarem Fortschritt (Status "wird_bereitgestellt" = In Arbeit).
-    Laufende Instanz: prueft zuerst, ob eine aktuelle Sicherung existiert (UPDATE_BACKUP_MAX_ALTER_STUNDEN), legt bei
-    Bedarf eine an und baut/startet dann neu; schlaegt die Sicherung fehl, wird NICHT aktualisiert.
+    Laufende Instanz: prueft zuerst, ob aktuelle Sicherungen existieren (UPDATE_BACKUP_MAX_ALTER_STUNDEN) - Feuerix und
+    die eingerichteten Zusatzdienste Paperless (Export) und OpenSlides (Dump) -, legt fehlende an und baut/startet dann
+    neu; schlaegt eine Sicherung fehl, wird NICHT aktualisiert.
     Gestoppte Instanz: baut nur das Image neu und bleibt gestoppt (kein Datenzugriff, deshalb ohne Sicherung).
     `vorher` (optional) wird zuerst aufgerufen, z. B. um den Feuerix-Code zu ziehen."""
     ausgang = _ausgangsstatus(mandant)
@@ -206,6 +207,12 @@ def update_mit_sicherung(mandant, vorher=None):
                 except BereitstellungsFehler as e:
                     mandant.protokollieren(f"Update abgebrochen: Sicherung fehlgeschlagen ({e})")
                     raise BereitstellungsFehler(f"Sicherung vor dem Update fehlgeschlagen: {e}")
+            from . import endsicherung      # erst hier: endsicherung -> dienstupdate -> updates -> betrieb
+            try:
+                endsicherung.zusatzdienste_sichern(mandant, 20)
+            except BereitstellungsFehler as e:
+                mandant.protokollieren(f"Update abgebrochen: Sicherung der Zusatzdienste fehlgeschlagen ({e})")
+                raise BereitstellungsFehler(f"Sicherung der Zusatzdienste vor dem Update fehlgeschlagen: {e}")
             update_ausrollen(mandant, _pruefen=False)
     except BereitstellungsFehler:
         # Laufende Instanz: ab Fortschritt 75 lief der Neustart schon und sie antwortet moeglicherweise nicht mehr;
