@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.24.1 (2026-10-10)
+- Fix: Mit aktivem Backup-Ziel wurden nur die Feuerix-Sicherungen auf die Netzwerkfreigabe hochgeladen. Jetzt landen auch der
+  **OpenSlides-Datenbank-Dump** (`<Freigabe>\<kürzel>\openslides\`) und der **Paperless-Export**
+  (`<Freigabe>\<kürzel>\paperless\`, samt Unterordnern gespiegelt) dort - bei Updates dieser Dienste und in der
+  Abschlusssicherung vor dem endgültigen Löschen. Schlägt der Upload fehl, wird (wie bei Feuerix) nichts aktualisiert bzw.
+  gelöscht; auf Wunsch kommt eine Mail.
+
 ## 0.24.0 (2026-10-10)
 - Neu: **Endgültiges Löschen einer Instanz mit Abschlusssicherung** (Admin-Aktion „Instanz ENDGÜLTIG löschen …“, nur
   Superuser, Bestätigung durch Eintippen des Kürzels). Vorher startet das Portal die Instanz bei Bedarf und sichert

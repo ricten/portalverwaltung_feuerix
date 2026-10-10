@@ -9,7 +9,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-from . import basis, benachrichtigung, dienstversionen, openslides, paperless
+from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless
 from .basis import WARTESCHLANGE_DIENST, BereitstellungsFehler
 from .dienstversionen import NAMEN
 from .models import UpdateZustand
@@ -20,6 +20,22 @@ def _schritt(mandant, prozent, text):
     basis.fortschritt(mandant, prozent, text)
 
 
+def _auf_freigabe(mandant, ordner, unterordner, rekursiv=False):
+    """Legt die Sicherung zusaetzlich auf der Netzwerkfreigabe ab, falls ein Backup-Ziel aktiv ist. Schlaegt das fehl,
+    wird der Vorgang (Update/Loeschen) abgebrochen - die Sicherung gilt dann nicht als vollstaendig."""
+    if not backupziel.aktuell():
+        return
+    try:
+        neu = backupziel.hochladen(mandant, ordner, unterordner, rekursiv)
+    except BereitstellungsFehler as e:
+        mandant.protokollieren(f"{unterordner}-Sicherung lokal angelegt, aber der Upload zur Netzwerkfreigabe schlug fehl: {e}")
+        benachrichtigung.senden("backup", f"Sicherung ({unterordner}) von {mandant.kuerzel} fehlgeschlagen",
+                                f"Der Upload der {unterordner}-Sicherung der Instanz {mandant.kuerzel} auf die "
+                                f"Netzwerkfreigabe ist fehlgeschlagen:\n\n{str(e)[:1500]}")
+        raise BereitstellungsFehler(f"Upload zur Netzwerkfreigabe fehlgeschlagen: {e}")
+    mandant.protokollieren(f"{unterordner}-Sicherung auf der Netzwerkfreigabe abgelegt ({neu} neue Datei(en)).")
+
+
 def paperless_export(mandant, bezeichnung="Paperless: Export vor dem Update"):
     """Exportiert alle Dokumente und Metadaten mit `document_exporter` in den Ordner export der Instanz."""
     befehl, cwd = paperless._compose_basis(mandant)
@@ -27,6 +43,7 @@ def paperless_export(mandant, bezeichnung="Paperless: Export vor dem Update"):
                  bezeichnung, timeout=7200, cwd=cwd)
     pfad = paperless._verzeichnis(mandant) / "export"
     mandant.protokollieren(f"Paperless-Export angelegt in {pfad}.")
+    _auf_freigabe(mandant, pfad, "paperless", rekursiv=True)
     return pfad
 
 
@@ -43,6 +60,7 @@ def openslides_dump(mandant, markierung, bezeichnung="OpenSlides: Datenbank-Dump
     datei = ziel / f"openslides-{markierung}-{datetime.now():%Y%m%d-%H%M%S}.sql"
     datei.write_text(dump, encoding="utf-8")
     mandant.protokollieren(f"OpenSlides-Datenbank gesichert in {datei}.")
+    _auf_freigabe(mandant, ziel, "openslides")
     return datei
 
 

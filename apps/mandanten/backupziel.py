@@ -2,7 +2,9 @@
 NAS, Samba) - mit Benutzer und Passwort, ohne dass das Portal etwas mounten oder Root-Rechte haben muss
 (Bibliothek smbprotocol, SMB-Signierung ist aktiv). Konfiguriert wird das im Admin unter "Backup-Ziel"."""
 import ntpath
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from .basis import BereitstellungsFehler
 from .models import BackupZiel
@@ -57,38 +59,51 @@ def testen(ziel):
     return f"Verbindung zu \\\\{ziel.server}\\{ziel.freigabe} erfolgreich (Schreiben und Löschen getestet)."
 
 
-def hochladen(mandant, lokaler_ordner):
-    """Laedt alle Dateien aus `lokaler_ordner` nach `<Wurzel>\\<kuerzel>\\`, die dort noch fehlen (gleicher Name und
-    gleiche Groesse = schon vorhanden), prueft die Groesse nach dem Hochladen und raeumt bei Bedarf auf (lokale
-    Kopie loeschen, alte Sicherungen auf der Freigabe nach `aufbewahrung_tage`). -> Anzahl neu hochgeladener Dateien."""
+def _spiegeln(smb, ziel, lokal, remote, rekursiv):
+    """Laedt die Dateien aus `lokal` nach `remote`, die dort fehlen (gleicher Name und gleiche Groesse = schon da),
+    prueft die Groesse und - mit `rekursiv` - auch Unterordner. -> Anzahl neu hochgeladener Dateien."""
+    vorhanden = {e.name: e.stat().st_size for e in smb.scandir(remote) if e.is_file()}
+    neu = 0
+    for datei in sorted(lokal.iterdir()):
+        if datei.is_dir():
+            if rekursiv:
+                unter = ntpath.join(remote, datei.name)
+                smb.makedirs(unter, exist_ok=True)
+                neu += _spiegeln(smb, ziel, datei, unter, True)
+            continue
+        groesse = datei.stat().st_size
+        ziel_pfad = ntpath.join(remote, datei.name)
+        if vorhanden.get(datei.name) != groesse:
+            with open(datei, "rb") as quelle, smb.open_file(ziel_pfad, mode="wb") as senke:
+                while True:
+                    stueck = quelle.read(CHUNK)
+                    if not stueck:
+                        break
+                    senke.write(stueck)
+            if smb.stat(ziel_pfad).st_size != groesse:
+                raise BereitstellungsFehler(f"{datei.name}: Größe auf der Freigabe stimmt nicht")
+            neu += 1
+        if ziel.lokal_loeschen and not rekursiv:
+            datei.unlink()
+    return neu
+
+
+def hochladen(mandant, lokaler_ordner, unterordner="", rekursiv=False):
+    """Laedt die Dateien aus `lokaler_ordner` nach `<Wurzel>\\<kuerzel>\\[<unterordner>\\]`, die dort noch fehlen,
+    prueft die Groesse nach dem Hochladen und raeumt bei Bedarf auf (lokale Kopie loeschen, alte Sicherungen auf der
+    Freigabe nach `aufbewahrung_tage`). Mit `rekursiv` werden auch Unterordner gespiegelt (z. B. der Paperless-Export);
+    dabei wird weder lokal noch auf der Freigabe etwas geloescht. -> Anzahl neu hochgeladener Dateien."""
     ziel = aktuell()
     if ziel is None:
         return 0
     smb = _smb()
-    neu = 0
     try:
         _verbinden(ziel, smb)
-        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel)
+        teile = [t for t in re.split(r"[\\/]+", unterordner) if t]
+        remote = ntpath.join(_wurzel(ziel), mandant.kuerzel, *teile)
         smb.makedirs(remote, exist_ok=True)
-        vorhanden = {e.name: e.stat().st_size for e in smb.scandir(remote) if e.is_file()}
-        for datei in sorted(lokaler_ordner.iterdir()):
-            if not datei.is_file():
-                continue
-            groesse = datei.stat().st_size
-            ziel_pfad = ntpath.join(remote, datei.name)
-            if vorhanden.get(datei.name) != groesse:
-                with open(datei, "rb") as quelle, smb.open_file(ziel_pfad, mode="wb") as senke:
-                    while True:
-                        stueck = quelle.read(CHUNK)
-                        if not stueck:
-                            break
-                        senke.write(stueck)
-                if smb.stat(ziel_pfad).st_size != groesse:
-                    raise BereitstellungsFehler(f"{datei.name}: Größe auf der Freigabe stimmt nicht")
-                neu += 1
-            if ziel.lokal_loeschen:
-                datei.unlink()
-        if ziel.aufbewahrung_tage:
+        neu = _spiegeln(smb, ziel, Path(lokaler_ordner), remote, rekursiv)
+        if ziel.aufbewahrung_tage and not rekursiv:
             grenze = datetime.now(timezone.utc) - timedelta(days=ziel.aufbewahrung_tage)
             for e in smb.scandir(remote):
                 if e.is_file() and datetime.fromtimestamp(e.stat().st_mtime, tz=timezone.utc) < grenze:

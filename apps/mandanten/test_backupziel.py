@@ -326,3 +326,97 @@ class OnlineCheckTests(TestCase):
         MandantInstanz.objects.filter(kuerzel="aus").update(online=True)
         BackupZiel.objects.filter(pk=1).update(online=True)
         self.assertNotIn("Nicht erreichbar:", self.client.get("/admin/").content.decode())
+
+
+class ZusatzsicherungenTests(TestCase):
+    """OpenSlides-Dump und Paperless-Export landen ebenfalls auf der Freigabe."""
+    ROOT = "\\\\nas.local\\backups\\feuerix\\portal\\b1"
+
+    def test_unterordner_und_rekursives_spiegeln(self):
+        _ziel()
+        m = _m()
+        fake = FakeSMB()
+        with tempfile.TemporaryDirectory() as tmp, patch("apps.mandanten.backupziel._smb", return_value=fake):
+            wurzel = Path(tmp)
+            (wurzel / "docs").mkdir()
+            (wurzel / "manifest.json").write_text("{}")
+            (wurzel / "docs" / "a.pdf").write_text("pdf")
+            self.assertEqual(backupziel.hochladen(m, wurzel, "paperless", rekursiv=True), 2)
+            self.assertEqual(backupziel.hochladen(m, wurzel, "paperless", rekursiv=True), 0)
+            (wurzel / "docs" / "b.pdf").write_text("neu")
+            self.assertEqual(backupziel.hochladen(m, wurzel, "paperless", rekursiv=True), 1)
+            self.assertTrue((wurzel / "manifest.json").exists())          # nie lokal geloescht
+        pfade = sorted(fake.dateien)
+        self.assertIn(self.ROOT + "\\paperless\\manifest.json", pfade)
+        self.assertIn(self.ROOT + "\\paperless\\docs\\a.pdf", pfade)
+
+    def test_ohne_rekursiv_werden_unterordner_ignoriert_und_aufbewahrung_gilt(self):
+        _ziel(aufbewahrung_tage=7)
+        m = _m()
+        fake = FakeSMB()
+        alt = time.time() - 10 * 86400
+        fake.dateien[self.ROOT + "\\openslides\\alt.sql"] = (b"x", alt)
+        with tempfile.TemporaryDirectory() as tmp, patch("apps.mandanten.backupziel._smb", return_value=fake):
+            (Path(tmp) / "unter").mkdir()
+            (Path(tmp) / "unter" / "x.txt").write_text("x")
+            (Path(tmp) / "neu.sql").write_text("n")
+            self.assertEqual(backupziel.hochladen(m, Path(tmp), "openslides"), 1)
+        namen = sorted(fake.dateien)
+        self.assertTrue(any(n.endswith("openslides\\neu.sql") for n in namen))
+        self.assertFalse(any(n.endswith("alt.sql") for n in namen))
+        self.assertFalse(any("unter" in n for n in namen))
+
+    def test_openslides_dump_geht_auf_die_freigabe(self):
+        from . import dienstupdate
+        _ziel()
+        m = _m()
+        fake = FakeSMB()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.backupziel._smb", return_value=fake), \
+             patch("apps.mandanten.dienstupdate.basis.docker", return_value="-- dump --\n"):
+            (Path(tmp) / "b1" / "openslides").mkdir(parents=True)
+            datei = dienstupdate.openslides_dump(m, "4.3.0")
+        self.assertTrue(datei.name.startswith("openslides-4.3.0-"))
+        self.assertTrue(any(n.startswith(self.ROOT + "\\openslides\\openslides-4.3.0-") for n in fake.dateien))
+        m.refresh_from_db()
+        self.assertIn("auf der Netzwerkfreigabe abgelegt", m.protokoll)
+
+    def test_paperless_export_geht_auf_die_freigabe(self):
+        from . import dienstupdate
+        _ziel()
+        m = _m()
+        fake = FakeSMB()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.backupziel._smb", return_value=fake), \
+             patch("apps.mandanten.dienstupdate.paperless._compose_basis", return_value=(["docker", "compose"], Path(tmp))), \
+             patch("apps.mandanten.dienstupdate.paperless._verzeichnis", return_value=Path(tmp) / "b1" / "paperless"), \
+             patch("apps.mandanten.dienstupdate.basis.docker", return_value=""):
+            export = Path(tmp) / "b1" / "paperless" / "export"
+            export.mkdir(parents=True)
+            (export / "manifest.json").write_text("{}")
+            dienstupdate.paperless_export(m)
+        self.assertIn(self.ROOT + "\\paperless\\manifest.json", fake.dateien)
+
+    def test_fehlgeschlagener_upload_bricht_ab(self):
+        from . import dienstupdate
+        _ziel()
+        m = _m()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.backupziel._smb", return_value=FakeSMB(fehler="Netz weg")), \
+             patch("apps.mandanten.dienstupdate.basis.docker", return_value="-- dump --\n"):
+            (Path(tmp) / "b1" / "openslides").mkdir(parents=True)
+            with self.assertRaises(BereitstellungsFehler) as ctx:
+                dienstupdate.openslides_dump(m, "4.3.0")
+        self.assertIn("Upload zur Netzwerkfreigabe fehlgeschlagen", str(ctx.exception))
+        m.refresh_from_db()
+        self.assertIn("schlug fehl", m.protokoll)
+
+    def test_ohne_aktives_ziel_kein_upload(self):
+        from . import dienstupdate
+        m = _m()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.backupziel._smb") as smb, \
+             patch("apps.mandanten.dienstupdate.basis.docker", return_value="-- dump --\n"):
+            (Path(tmp) / "b1" / "openslides").mkdir(parents=True)
+            dienstupdate.openslides_dump(m, "4.3.0")
+        smb.assert_not_called()

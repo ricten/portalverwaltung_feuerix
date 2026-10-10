@@ -52,7 +52,9 @@ Aktuell automatisiert:
 - **Betrieb**:
   - **Backup-Ziel** (Admin › Backup-Ziel): Sicherungen zusätzlich auf eine SMB-/Windows-/NAS-Freigabe hochladen
     (Server, Freigabe, Unterordner, Benutzer, Passwort verschlüsselt; Aufbewahrung in Tagen; optional lokale Kopie löschen;
-    „Speichern und Verbindung testen“). Mit aktivem Ziel zählt eine Sicherung erst nach erfolgreichem Upload als aktuell.
+    „Speichern und Verbindung testen“). Mit aktivem Ziel zählt eine Sicherung erst nach erfolgreichem Upload als aktuell. Hochgeladen
+    werden die Feuerix-Sicherungen (`<kürzel>\`), die OpenSlides-Dumps (`<kürzel>\openslides\`) und der Paperless-Export
+    (`<kürzel>\paperless\`).
   - **E-Mail-Benachrichtigung** (Admin › Benachrichtigungen): SMTP-Daten und Empfänger einstellen, Test-Mail senden. Mails
     nur bei Ereignissen: Ausfall/Wiederkehr (erst nach einstellbarer Dauer, Standard 10 Min.), fehlgeschlagene Sicherung,
     neue Feuerix-Version.
