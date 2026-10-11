@@ -1,6 +1,7 @@
 import re
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -68,6 +69,16 @@ class MandantInstanz(models.Model):
     openslides_superadmin_passwort = VerschluesseltesTextField("OpenSlides Superadmin-Passwort", blank=True,
                                                                editable=False)
     openslides_initialisiert = models.BooleanField("OpenSlides initialisiert", default=False, editable=False)
+
+    demo = models.BooleanField(
+        "Demo-Instanz (mit Beispieldaten)", default=False,
+        help_text="Legt bei der Bereitstellung fiktive Mitglieder mit Beitragsrechnungen, Zahlungen und Mahnungen sowie ein "
+                  "Beispiel-Inventar an (Feuerix-Befehl „beispieldaten“). Nur für Vorführ- und Testinstanzen, nie für echte Vereine. "
+                  "Bei einer schon laufenden Instanz legt die Aktion „Beispieldaten anlegen“ sie nachträglich an.")
+    demo_anzahl = models.PositiveSmallIntegerField(
+        "Anzahl Beispiel-Mitglieder", default=40, validators=[MinValueValidator(1), MaxValueValidator(500)])
+    demo_inventar = models.BooleanField("Beispiel-Inventar anlegen", default=True)
+    beispieldaten_angelegt = models.BooleanField("Beispieldaten angelegt", default=False, editable=False)
 
     secret_key = VerschluesseltesTextField("SECRET_KEY", blank=True, editable=False)
     field_encryption_key = VerschluesseltesTextField("FIELD_ENCRYPTION_KEY", blank=True, editable=False)

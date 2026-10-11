@@ -35,6 +35,12 @@ Verein gesperrten) Mandantenfähigkeit.
 - **Paperless-ngx** und **OpenSlides 4** je Mandant als eigene Stacks (`mandant-<kürzel>-paperless`, `…-openslides`), per
   Haken im Instanzformular oder über die Domain-Felder; die Anbindung in Feuerix (Token bzw. Superadmin) wird automatisch
   hinterlegt. Ohne eigene Domain wird `paperless.<domain>` bzw. `openslides.<domain>` genommen.
+- **Demo-Instanzen mit Beispieldaten**: Im Instanzformular den Haken „Demo-Instanz (mit Beispieldaten)“ setzen (Anzahl der Mitglieder,
+  Standard 40, und Beispiel-Inventar einstellbar). Bei der Bereitstellung führt das Portal Feuerix' Befehl `beispieldaten` in der Instanz
+  aus: fiktive Mitglieder mit Beitragsrechnungen, Zahlungen und Mahnungen sowie ein Beispiel-Inventar. Das geschieht nur einmal je
+  Instanz; Demo-Instanzen tragen in der Liste ein „DEMO“-Abzeichen (filterbar). Für eine schon laufende Instanz: Haken setzen, speichern, dann
+  Aktion „Beispieldaten anlegen (nur Demo-Instanzen)“ bzw. `manage.py mandant_beispieldaten <kürzel>`. **Nur für Vorführ- und Testinstanzen,
+  nie für echte Vereine.**
 - **Port-Vergabe**: nächster freier Port ab `WEB_PORT_BASIS` usw. Frei heißt: von keiner Instanz in irgendeinem Port-Feld
   belegt **und** auf dem Server tatsächlich nicht gebunden (Bind-Versuch). OpenSlides bekommt je Instanz einen eigenen
   Verwaltungsport (`OPENSLIDES_MANAGE_PORT_BASIS`), damit sich mehrere Instanzen nicht den Standard-Port 9002 teilen.
@@ -85,7 +91,7 @@ Startseite `/` leitet dorthin um).
 - **Backup-Ziel**, **Benachrichtigungen** und **Gesamtlog** als eigene Seiten.
 - Die **Version der Portalverwaltung** steht in der Fußzeile.
 
-Admin-Aktionen (Sammelaktionen): Bereitstellen, Starten, Stoppen, Neustarten, Instanz stilllegen, Aus Sicherung
+Admin-Aktionen (Sammelaktionen): Bereitstellen, Beispieldaten anlegen (Demo), Starten, Stoppen, Neustarten, Instanz stilllegen, Aus Sicherung
 wiederherstellen, Instanz endgültig löschen, Sichern (Feuerix, Paperless, OpenSlides), Auf aktuellen Feuerix-Code
 aktualisieren, Zugangsdaten anzeigen, Admin-Passwort zurücksetzen. Alles Länger­laufende läuft über Celery im Hintergrund.
 
@@ -130,6 +136,7 @@ Alles Wichtige geht im Admin; für Skripte, Cron und Notfälle gibt es `./venv/b
 | `mandant_bereitstellen <kürzel>` | Instanz bereitstellen (blockierend; im Admin läuft es über Celery) |
 | `mandant_status` | Status und Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring) |
 | `mandant_online_check [--streng]` | Online-Check: Instanzen und Backup-Ziel prüfen und den Zustand speichern |
+| `mandant_beispieldaten <kürzel> [--anzahl N] [--ohne-inventar]` | Beispieldaten in einer laufenden Demo-Instanz anlegen (nur einmal) |
 | `mandant_dienst <kürzel> stop\|start\|restart` | Instanz samt Paperless/OpenSlides anhalten, starten, neu starten |
 | `env_entschluesseln <datei> [--ausgabe .env]` | die mit der Sicherung abgelegte, verschlüsselte `.env` wieder lesbar machen |
 | `mandant_backup [kürzel]` | vollständige Sicherung (Feuerix, Paperless-Export, OpenSlides-Dump) |

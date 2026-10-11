@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.29.0 (2026-10-12)
+- Neu: **Demo-Instanzen mit Beispieldaten.** Im Instanzformular gibt es den Haken „Demo-Instanz (mit Beispieldaten)“ mit Anzahl der
+  Beispiel-Mitglieder (Standard 40) und der Option „Beispiel-Inventar anlegen“. Bei der Bereitstellung führt das Portal in der Instanz
+  Feuerix' Befehl `beispieldaten` aus (fiktive Mitglieder mit Beitragsrechnungen, Zahlungen und Mahnungen, Beispiel-Inventar). Das
+  geschieht nur einmal je Instanz (der Befehl würde sonst bei jedem Lauf neue Mitglieder anlegen); Demo-Instanzen tragen in der Liste
+  ein „DEMO“-Abzeichen und lassen sich filtern. Für eine schon laufende Instanz: Haken setzen, speichern und die Aktion „Beispieldaten
+  anlegen (nur Demo-Instanzen)“ bzw. `manage.py mandant_beispieldaten <kürzel> [--anzahl N] [--ohne-inventar]` ausführen.
+- Datenbank-Migration 0017.
+
 ## 0.28.0 (2026-10-10)
 - Neu: **Die `.env` der Instanz wird mit jeder Sicherung mitgesichert** - auch mit der letzten Sicherung vor dem endgültigen Löschen - und
   liegt dann bei bestehendem Backup-Ziel auf der Netzwerkfreigabe (`<kürzel>\env-<hash>.enc`). Sie enthält den `FIELD_ENCRYPTION_KEY`,

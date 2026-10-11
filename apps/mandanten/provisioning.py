@@ -21,6 +21,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils.text import slugify
 
 from . import basis, dienstversionen, openslides, paperless, proxy
 from .basis import BereitstellungsFehler, docker, instanz_verzeichnis
@@ -248,6 +249,50 @@ def feuerix_version():
         return ""
 
 
+def beispieldaten_anlegen(mandant):
+    """Legt in der laufenden Feuerix-Instanz die Beispieldaten an (Feuerix-Befehl `beispieldaten`: fiktive Mitglieder mit
+    Rechnungen, Zahlungen und Mahnungen, Beispiel-Inventar). Nur fuer Demo-Instanzen und nur einmal - der Befehl legt bei jedem
+    Aufruf neue Mitglieder an, deshalb merkt sich das Portal, dass es schon geschehen ist."""
+    if not mandant.demo:
+        raise BereitstellungsFehler("Beispieldaten gibt es nur für Demo-Instanzen (Haken „Demo-Instanz“ setzen).")
+    if mandant.beispieldaten_angelegt:
+        mandant.protokollieren("Beispieldaten sind bereits angelegt - übersprungen.")
+        return False
+    verein = slugify(mandant.verein_name)[:50] or "verein"      # so legt Feuerix' Ersteinrichtung das Vereinskuerzel an
+    befehl = _compose_basis(mandant) + ["exec", "-T", "web", "python", "manage.py", "beispieldaten", "--verein", verein,
+                                        "--anzahl", str(int(mandant.demo_anzahl))]
+    if not mandant.demo_inventar:
+        befehl.append("--ohne-inventar")
+    docker(befehl, "Beispieldaten anlegen", timeout=1800)
+    mandant.beispieldaten_angelegt = True
+    mandant.save(update_fields=["beispieldaten_angelegt"])
+    mandant.protokollieren(f"Beispieldaten angelegt ({mandant.demo_anzahl} Mitglieder"
+                           f"{'' if mandant.demo_inventar else ', ohne Inventar'}).")
+    return True
+
+
+def beispieldaten_nachtragen(mandant):
+    """Beispieldaten fuer eine bereits laufende Demo-Instanz (Admin-Aktion/Befehl), mit sichtbarem Fortschritt."""
+    ausgang = basis.status_vor_vormerkung(mandant)
+    if ausgang != "laeuft":
+        raise BereitstellungsFehler(f"Beispieldaten nur für laufende Instanzen (Status: {ausgang}).")
+    if not mandant.demo:
+        raise BereitstellungsFehler("Beispieldaten gibt es nur für Demo-Instanzen (Haken „Demo-Instanz“ setzen).")
+    mandant.status = "wird_bereitgestellt"
+    mandant.save(update_fields=["status"])
+    try:
+        basis.fortschritt(mandant, 30, "Beispieldaten anlegen (kann etwas dauern)")
+        beispieldaten_anlegen(mandant)
+    except BereitstellungsFehler:
+        mandant.status = ausgang
+        mandant.schritt = f"Beispieldaten fehlgeschlagen bei: {mandant.schritt}"[:200]
+        mandant.save(update_fields=["status", "schritt"])
+        raise
+    mandant.status = ausgang
+    mandant.save(update_fields=["status"])
+    basis.fortschritt(mandant, 100, "Fertig")
+
+
 def bereitstellen(mandant):
     """Fuehrt die komplette Bereitstellung aus und aktualisiert den Status. Erneutes Aufrufen ist gefahrlos
     (Geheimnisse bleiben, docker compose up aendert nichts Unveraendertes)."""
@@ -260,6 +305,9 @@ def bereitstellen(mandant):
         stack_hochfahren(mandant)
         basis.fortschritt(mandant, 35, "Feuerix: warten auf Migration und Ersteinrichtung")
         auf_bereitschaft_warten(mandant)
+        if mandant.demo and not mandant.beispieldaten_angelegt:
+            basis.fortschritt(mandant, 40, "Beispieldaten anlegen (Demo-Instanz)")
+            beispieldaten_anlegen(mandant)
         basis.fortschritt(mandant, 45, "Zusatzdienste")
         zusatzdienste_bereitstellen(mandant)
         # Erst jetzt "laeuft": der Proxy nimmt nur Instanzen mit diesem Status auf.

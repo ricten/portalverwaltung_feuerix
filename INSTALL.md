@@ -59,6 +59,10 @@ Benutzername und Passwort des Portal-Administrators. Mehrfaches Ausführen ist m
 2. **Mandanten-Instanzen → Hinzufügen**: Kürzel, Vereinsname, Domain, Administrator-Benutzername und -E-Mail ausfüllen.
    Optional die Haken **Paperless-ngx** / **OpenSlides** setzen (das Domain-Feld nur ausfüllen, wenn die Dienste unter einer
    eigenen Adresse laufen sollen; sonst wird `paperless.<domain>` bzw. `openslides.<domain>` genommen).
+   **Demo- oder Testinstanz?** Haken **„Demo-Instanz (mit Beispieldaten)“** setzen: Das Portal füllt die Instanz bei der Bereitstellung mit
+   fiktiven Mitgliedern, Rechnungen, Zahlungen (auch Mahnungen) und einem Beispiel-Inventar (Anzahl einstellbar, Standard 40). Nie bei echten
+   Vereinen verwenden. Eine schon laufende Instanz kannst du nachträglich zur Demo machen: Haken setzen, speichern, Aktion
+   **Beispieldaten anlegen (nur Demo-Instanzen)**.
 3. Instanz in der Liste markieren → Aktion **Bereitstellen**. Der Fortschrittsbalken zeigt die Schritte; der erste Lauf
    baut das Feuerix-Image und dauert einige Minuten.
 4. Aktion **Zugangsdaten des Instanz-Administrators anzeigen** zeigt Adresse, Benutzer und Startpasswort der neuen
@@ -187,6 +191,7 @@ nicht ankommt: unter „Status“ steht der letzte Versandfehler.
 | Seite zeigt „Not Found“ | Version < 0.7.0 oder Pfad falsch – `/admin/` aufrufen, `git pull` und Dienst neu starten |
 | Bereitstellung hängt bei 35 % und schlägt fehl | Logs des Web-Containers: `docker logs --tail 50 mandant-<kürzel>-web-1`; Protokoll der Instanz im Admin lesen |
 | `password authentication failed for user "mandant_…"` | Fehler in Version < 0.7.1. Nach `git pull` und Neustart der Dienste: `docker compose -p mandant-<kürzel> down -v`, dann erneut **Bereitstellen** |
+| „Beispieldaten“ schlagen fehl oder fehlen | Der Befehl `beispieldaten` gehört zu Feuerix: Der Feuerix-Checkout muss aktuell sein (Update-Hinweis) und die Instanz laufen. Das Protokoll der Instanz nennt den Fehler; sie werden nur einmal angelegt und bei einem Fehler beim nächsten „Bereitstellen“ bzw. mit der Aktion erneut versucht |
 | Admin-Passwort der Instanz unbekannt | Aktion **Zugangsdaten anzeigen** bzw. **Admin-Passwort zurücksetzen** |
 | Nach `git pull` keine Wirkung | Dienste neu starten: `sudo systemctl restart portal-web portal-worker` (der Worker lädt Code nicht automatisch nach) |
 | Backup-Ziel zeigt „NICHT AKTIV“ / es landet nichts auf der Freigabe | Haken „aktiv“ im Backup-Ziel setzen und speichern (der Verbindungstest klappt auch ohne). Gesucht wird unter `<Freigabe>\<Unterordner>\<Kürzel>\`; `openslides` und `paperless` liegen darin in eigenen Ordnern |

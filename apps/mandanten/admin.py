@@ -42,15 +42,15 @@ class MandantForm(forms.ModelForm):
 
 @admin.register(MandantInstanz)
 class MandantInstanzAdmin(admin.ModelAdmin):
-    list_display = ("kuerzel", "verein_name", "domain", "status", "fortschrittsbalken", "erreichbarkeit",
+    list_display = ("kuerzel", "verein_anzeige", "domain", "status", "fortschrittsbalken", "erreichbarkeit",
                     "steuerung", "version_spalte", "erstellt_am")
-    list_filter = ("status",)
+    list_filter = ("status", "demo")
     search_fields = ("kuerzel", "verein_name", "domain", "paperless_domain", "openslides_domain")
     readonly_fields = ("web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
                        "protokoll", "feuerix_version", "paperless_version", "openslides_version",
                        "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "sichern", "aktualisieren",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
@@ -322,6 +322,13 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             return text
         return format_html("{}<br>{}", text, mark_safe("<br>".join(str(z) for z in zeilen)))
 
+    @admin.display(description="Verein", ordering="verein_name")
+    def verein_anzeige(self, obj):
+        if obj.demo:
+            return format_html('{} <span style="background:#ef6c00;color:#fff;border-radius:999px;padding:1px 8px;'
+                               'font-size:11px;font-weight:600">DEMO</span>', obj.verein_name)
+        return obj.verein_name
+
     @admin.display(description="Version")
     def version_spalte(self, obj):
         """Bereitgestellte Version; bei verfuegbarem Update zusaetzlich ein Knopf zum Aktualisieren dieser Instanz."""
@@ -395,7 +402,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
     def get_fields(self, request, obj=None):
         pflichtfelder = ["kuerzel", "verein_name", "domain", "admin_benutzername", "admin_email",
                          "paperless_installieren", "paperless_domain", "openslides_installieren",
-                         "openslides_domain"]
+                         "openslides_domain", "demo", "demo_anzahl", "demo_inventar"]
         if obj is None:
             return pflichtfelder
         return pflichtfelder + ["web_port", "paperless_port", "openslides_port", "status", "fortschrittsbalken",
@@ -477,6 +484,27 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             gestartet.append(m.kuerzel)
         if gestartet:
             self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
+                                       "„Fortschritt“.", messages.INFO)
+
+    @admin.action(description="Beispieldaten anlegen (nur Demo-Instanzen)")
+    def beispieldaten(self, request, queryset):
+        gestartet = []
+        for m in queryset:
+            if not m.demo:
+                self.message_user(request, f"{m.kuerzel}: keine Demo-Instanz - Haken „Demo-Instanz“ im Formular setzen.",
+                                  messages.WARNING)
+            elif m.beispieldaten_angelegt:
+                self.message_user(request, f"{m.kuerzel}: Beispieldaten sind bereits angelegt.", messages.WARNING)
+            elif m.status != "laeuft":
+                self.message_user(request, f"{m.kuerzel}: Beispieldaten nur für laufende Instanzen (Status: "
+                                           f"{m.get_status_display()}).", messages.WARNING)
+            else:
+                vormerken(m, "Beispieldaten: in der Warteschlange")
+                self._log(request, m, "Beispieldaten anlegen gestartet")
+                tasks.mandant_beispieldaten_task.delay(m.pk)
+                gestartet.append(m.kuerzel)
+        if gestartet:
+            self.message_user(request, f"Beispieldaten werden angelegt für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
 
     @admin.action(description="Hängende Instanz zurücksetzen („In Arbeit“ beenden)")

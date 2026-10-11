@@ -68,6 +68,12 @@ def mandant_wiederherstellen_task(mandant_id, auswahl, mit_medien=True, vorher_s
 
 
 @shared_task
+def mandant_beispieldaten_task(mandant_id):
+    from . import provisioning
+    _ausfuehren(provisioning.beispieldaten_nachtragen, mandant_id, protokollieren=True)
+
+
+@shared_task
 def mandant_backup_task(mandant_id):
     _ausfuehren(betrieb.vollsicherung, mandant_id, protokollieren=True)
 

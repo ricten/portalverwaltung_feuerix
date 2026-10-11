@@ -118,7 +118,7 @@ class AdminAktionTests(TestCase):
             admin.bereitstellen(request, MandantInstanz.objects.all())
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
-        self.assertEqual({"bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "sichern",
+        self.assertEqual({"bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "sichern",
                           "aktualisieren", "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"},
                          set(admin.actions))
 
@@ -289,7 +289,7 @@ class NachinstallationTests(TestCase):
 
     def _post(self, m, **extra):
         daten = dict(kuerzel=m.kuerzel, verein_name=m.verein_name, domain=m.domain, admin_benutzername="admin",
-                     admin_email="")
+                     admin_email="", demo_anzahl="40")
         daten.update(extra)
         return self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/change/", daten)
 
@@ -321,7 +321,7 @@ class NachinstallationTests(TestCase):
     def test_bei_neuer_instanz_nur_speichern(self):
         with patch("apps.mandanten.tasks.mandant_bereitstellen_task.delay") as delay:
             antwort = self.client.post("/admin/mandanten/mandantinstanz/add/", dict(
-                kuerzel="neu", verein_name="Neu e.V.", domain="neu.example.org", admin_benutzername="admin",
+                kuerzel="neu", verein_name="Neu e.V.", domain="neu.example.org", admin_benutzername="admin", demo_anzahl="40",
                 admin_email="", openslides_installieren="on"))
         self.assertEqual(antwort.status_code, 302)
         self.assertEqual(MandantInstanz.objects.get(kuerzel="neu").openslides_domain, "openslides.neu.example.org")
