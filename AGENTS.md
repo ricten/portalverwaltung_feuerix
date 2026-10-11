@@ -38,7 +38,8 @@ Zustand in der Tabelle `UpdateZustand` (eine Zeile), Hinweis in `templates/admin
   sieht, sie ausführen); jede eigene Admin-Ansicht prüft das Recht selbst. Betreiber-Einstellungen (Backup-Ziel, Mailserver) nur für Superuser.
   Dateien mit Geheimnissen über `rechte.geheim_schreiben()` schreiben, Ordner über `basis.instanz_verzeichnis()` anlegen (0700). Nie Passwörter
   in Befehlszeilen (stdin nutzen) oder Cookies/Meldungen im Klartext ablegen, die nicht ausdrücklich dafür gedacht sind.
-  Regressionstests: `apps/mandanten/test_sicherheit.py`.
+  Regressionstests: `apps/mandanten/test_sicherheit.py`, `test_haertung.py`. Die Anmeldung läuft über `loginsperre.SperrBackend` (Sperre nach
+  Fehlversuchen, `AUTHENTICATION_BACKENDS`); heruntergeladene Programme (osmanage) nur mit Prüfsumme ausführen.
 
 ## Dokumentation
 Bei jeder Änderung die Doku mitpflegen: [README.md](README.md) (Funktionen, Betrieb), [INSTALL.md](INSTALL.md)

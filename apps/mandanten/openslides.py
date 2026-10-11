@@ -3,6 +3,8 @@ mit `osmanage` (wie Feuerix' openslides/install.sh). Der Stack bekommt den Proje
 `<projekt>-openslides` (COMPOSE_PROJECT_NAME), damit sich mehrere Mandanten nicht in die Quere kommen.
 Danach wird die Anbindung (Superadmin) in der Feuerix-Instanz des Mandanten hinterlegt.
 """
+import hashlib
+import json
 import re
 import shutil
 import time
@@ -16,6 +18,7 @@ from . import basis
 from .basis import BereitstellungsFehler
 
 OSMANAGE_URL = "https://github.com/OpenSlides/openslides-cli/releases/download/latest/osmanage"
+OSMANAGE_API = "https://api.github.com/repos/OpenSlides/openslides-cli/releases/tags/latest"
 VORLAGE_URL = ("https://raw.githubusercontent.com/OpenSlides/openslides-cli/refs/heads/main/contrib/"
                "docker-compose.yml.tmpl")
 
@@ -40,15 +43,46 @@ def _env(mandant):
     return {"COMPOSE_PROJECT_NAME": projektname(mandant)}
 
 
-def _herunterladen(quelle, ziel, ausfuehrbar=False):
+def osmanage_pruefsumme():
+    """SHA-256 des osmanage-Releases laut GitHub (Feld `digest` der Release-Datei). Ohne Pruefsumme wird nichts ausgefuehrt."""
+    anfrage = urllib.request.Request(OSMANAGE_API, headers={"Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(anfrage, timeout=30) as antwort:
+            release = json.load(antwort)
+        for datei in release.get("assets", []):
+            digest = datei.get("digest") or ""
+            if datei.get("name") == "osmanage" and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                return digest[7:]
+    except (urllib.error.URLError, ConnectionError, TimeoutError, ValueError, AttributeError) as e:
+        raise BereitstellungsFehler(f"OpenSlides: Prüfsumme von osmanage konnte nicht geholt werden: {e}")
+    raise BereitstellungsFehler("OpenSlides: GitHub liefert keine Prüfsumme für osmanage - nicht ausgeführt.")
+
+
+def _herunterladen(quelle, ziel, ausfuehrbar=False, pruefsumme=None):
+    """Laedt eine Datei einmal und merkt sich ihre SHA-256 in `<datei>.sha256`. Spaetere Aufrufe pruefen die Datei gegen
+    diesen Wert (ein nachtraeglich veraendertes osmanage wird nicht ausgefuehrt). `pruefsumme` (Funktion) liefert die
+    vom Hersteller veroeffentlichte Summe, gegen die der frische Download geprueft wird."""
+    merk = ziel.with_name(ziel.name + ".sha256")
     if ziel.exists():
+        ist = hashlib.sha256(ziel.read_bytes()).hexdigest()
+        if not merk.exists():
+            merk.write_text(ist + "\n", encoding="utf-8")        # Bestand aelterer Versionen: ab jetzt ueberwacht
+        elif merk.read_text(encoding="utf-8").strip() != ist:
+            raise BereitstellungsFehler(
+                f"OpenSlides: {ziel.name} wurde verändert (Prüfsumme stimmt nicht mehr) - nicht ausgeführt. "
+                f"Datei {ziel} und {merk.name} löschen, dann wird sie neu geladen.")
         return ziel
     try:
         with urllib.request.urlopen(quelle, timeout=120) as antwort:
             daten = antwort.read()
     except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
         raise BereitstellungsFehler(f"OpenSlides: Download von {quelle} fehlgeschlagen: {e}")
+    summe = hashlib.sha256(daten).hexdigest()
+    if pruefsumme and summe != pruefsumme():
+        raise BereitstellungsFehler(f"OpenSlides: Prüfsumme von {ziel.name} stimmt nicht mit der des Herstellers überein - "
+                                    "Download verworfen.")
     ziel.write_bytes(daten)
+    merk.write_text(summe + "\n", encoding="utf-8")
     if ausfuehrbar:
         ziel.chmod(0o755)
     return ziel
@@ -58,7 +92,7 @@ def werkzeuge_bereitstellen():
     """osmanage und die Compose-Vorlage werden einmal fuer alle Mandanten geladen und zwischengespeichert."""
     verz = Path(settings.INSTANZEN_VERZEICHNIS) / "_werkzeuge"
     verz.mkdir(parents=True, exist_ok=True)
-    return (_herunterladen(OSMANAGE_URL, verz / "osmanage", ausfuehrbar=True),
+    return (_herunterladen(OSMANAGE_URL, verz / "osmanage", ausfuehrbar=True, pruefsumme=osmanage_pruefsumme),
             _herunterladen(VORLAGE_URL, verz / "docker-compose.yml.tmpl"))
 
 

@@ -86,6 +86,11 @@ MESSAGE_STORAGE = "django.contrib.messages.storage.session.SessionStorage"
 # Anmeldung der Weboberflaeche laeuft nach so vielen Stunden ab (Standard 12).
 SESSION_COOKIE_AGE = int(os.environ.get("SESSION_DAUER_STUNDEN", "12")) * 3600
 
+# Anmelde-Sperre: nach so vielen Fehlversuchen (je Adresse bzw. Benutzername) ist die Anmeldung so viele Minuten gesperrt.
+LOGIN_MAX_VERSUCHE = int(os.environ.get("LOGIN_MAX_VERSUCHE", "5"))
+LOGIN_SPERRE_MINUTEN = int(os.environ.get("LOGIN_SPERRE_MINUTEN", "15"))
+AUTHENTICATION_BACKENDS = ["apps.mandanten.loginsperre.SperrBackend"]
+
 LANGUAGE_CODE = "de"
 TIME_ZONE = "Europe/Berlin"
 USE_I18N = True

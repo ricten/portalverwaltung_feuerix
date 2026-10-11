@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.32.0 (2026-10-12)
+Restliche Punkte der Sicherheitsprüfung:
+- **Anmelde-Sperre**: Nach 5 Fehlversuchen (je Adresse und je Benutzername, einstellbar mit `LOGIN_MAX_VERSUCHE`) ist die Anmeldung
+  15 Minuten gesperrt (`LOGIN_SPERRE_MINUTEN`), auch mit richtigem Passwort; die Anmeldeseite nennt die Uhrzeit. Ein Erfolg setzt die Zähler
+  zurück. Aufheben von Hand: `manage.py login_entsperren`. Neue Tabelle (Migration 0019).
+- **osmanage mit Prüfsumme**: Der Download wird gegen die von GitHub veröffentlichte SHA-256 des Releases geprüft (ohne Prüfsumme wird nichts
+  ausgeführt) und die Summe in `osmanage.sha256` gemerkt; vor jeder Nutzung wird die Datei dagegen geprüft, eine veränderte Datei wird nicht
+  ausgeführt. Dasselbe Merken gilt für die Compose-Vorlage. Bestehende Dateien werden beim ersten Aufruf übernommen.
+- **SMB verschlüsselt**: Neue Option „Übertragung verschlüsseln (SMB 3)“ im Backup-Ziel, standardmäßig an. Unterstützt der Server das nicht
+  (sehr alte NAS), meldet der Verbindungstest einen Fehler; dann die Option abschalten.
+
 ## 0.31.0 (2026-10-12)
 **Sicherheitsprüfung des Codes - behobene Schwachstellen** (Abhängigkeiten geprüft: keine bekannten Schwachstellen; Eingaben, die in `.env`
 und Caddyfile fließen, werden bereits streng validiert; keine Shell-Aufrufe, keine rohen SQL-Abfragen):

@@ -1,13 +1,15 @@
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.forms import AdminAuthenticationForm
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import backupziel, benachrichtigung, betrieb, gesamtlog, provisioning, tasks, updates
+from . import backupziel, benachrichtigung, betrieb, gesamtlog, loginsperre, provisioning, tasks, updates
 from .basis import vormerken, WARTESCHLANGE_DIENST, WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
 from .models import BackupZiel, Benachrichtigung, LogEintrag, MandantInstanz, UpdateZustand
 
@@ -656,6 +658,21 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                          "wird nur jetzt angezeigt, bitte sicher weitergeben.", messages.WARNING)
 
 
+class SperrAnmeldeForm(AdminAuthenticationForm):
+    """Anmeldeformular, das eine laufende Sperre ausdruecklich meldet (statt nur "falsches Passwort")."""
+
+    def clean(self):
+        bis = loginsperre.gesperrt_bis(self.request, self.cleaned_data.get("username"))
+        if bis:
+            raise forms.ValidationError(
+                "Zu viele Fehlversuche - die Anmeldung ist bis %(uhr)s Uhr gesperrt.", code="gesperrt",
+                params={"uhr": timezone.localtime(bis).strftime("%H:%M")})
+        return super().clean()
+
+
+admin.site.login_form = SperrAnmeldeForm
+
+
 class BackupZielForm(forms.ModelForm):
     passwort_neu = forms.CharField(
         label="Passwort", required=False, widget=forms.PasswordInput(render_value=False),
@@ -663,7 +680,8 @@ class BackupZielForm(forms.ModelForm):
 
     class Meta:
         model = BackupZiel
-        fields = ["aktiv", "server", "freigabe", "unterordner", "benutzer", "aufbewahrung_tage", "lokal_loeschen"]
+        fields = ["aktiv", "server", "freigabe", "unterordner", "benutzer", "verschluesselung", "aufbewahrung_tage",
+                  "lokal_loeschen"]
 
     def clean(self):
         daten = super().clean()
@@ -677,7 +695,7 @@ class BackupZielAdmin(admin.ModelAdmin):
     """Eine einzige Einstellung: die Liste fuehrt direkt zum Formular."""
     form = BackupZielForm
     fields = ["status_anzeige", "aktiv", "server", "freigabe", "unterordner", "benutzer", "passwort_neu",
-              "aufbewahrung_tage", "lokal_loeschen"]
+              "verschluesselung", "aufbewahrung_tage", "lokal_loeschen"]
     readonly_fields = ["status_anzeige"]
 
     @admin.display(description="Status")

@@ -128,6 +128,7 @@ im Projektverzeichnis selbst, bereits gesetzte Umgebungsvariablen (systemd) habe
 | `UPDATE_DIENSTE_PRUEFEN` | 1 | Versionen von Paperless/OpenSlides erfassen und auf GitHub nach neuen Releases schauen |
 | `UPDATE_BACKUP_MAX_ALTER_STUNDEN` | 24 | höchstes Alter einer Sicherung, ab dem vor einem Update neu gesichert wird |
 | `SESSION_DAUER_STUNDEN` | 12 | Dauer der Anmeldung in der Weboberfläche |
+| `LOGIN_MAX_VERSUCHE` / `LOGIN_SPERRE_MINUTEN` | 5 / 15 | Fehlversuche bis zur Sperre / Dauer der Sperre |
 | `LOG_AUFBEWAHRUNG_TAGE` | 90 | Aufbewahrung des Gesamtlogs (0 = nie löschen) |
 | `PROXY_NUR_HTTP` | 0 | nur für Tests/lokal: Caddy ohne Zertifikate |
 
@@ -144,6 +145,7 @@ Alles Wichtige geht im Admin; für Skripte, Cron und Notfälle gibt es `./venv/b
 | `mandant_demo_zuruecksetzen <kürzel> [--standard-speichern]` | Demo-Instanz auf den Demo-Standard zurücksetzen bzw. den jetzigen Stand als Standard speichern |
 | `mandant_dienst <kürzel> stop\|start\|restart` | Instanz samt Paperless/OpenSlides anhalten, starten, neu starten |
 | `env_entschluesseln <datei> [--ausgabe .env]` | die mit der Sicherung abgelegte, verschlüsselte `.env` wieder lesbar machen |
+| `login_entsperren` | Hebt alle Anmelde-Sperren auf |
 | `rechte_haerten` | Dateirechte im Instanzverzeichnis korrigieren (Ordner 0700, `.env` 0600); läuft auch beim Online-Check |
 | `mandant_backup [kürzel]` | vollständige Sicherung (Feuerix, Paperless-Export, OpenSlides-Dump) |
 | `mandant_update_pruefen [--ausrollen]` | auf ein neues Feuerix prüfen, auf Wunsch sofort ausrollen (mit Sicherung vorab) |
@@ -163,7 +165,7 @@ alle Fehler gemeldet (Protokoll, auf Wunsch Mail).
 **Backup-Ziel (Netzwerkfreigabe)**: Im Admin unter **Backup-Ziel** (Server, Freigabe, Unterordner, Benutzer, Passwort
 verschlüsselt gespeichert; **Haken „aktiv“ nicht vergessen** – die Seite zeigt oben, ob wirklich hochgeladen wird, wann zuletzt
 und ob die Freigabe erreichbar ist). Unterstützt wird SMB/CIFS (Windows-Freigabe, NAS, Samba); das Portal schreibt direkt per
-SMB, ohne etwas zu mounten oder Root-Rechte. Hochgeladen wird nach `<Freigabe>\<Unterordner>\<kürzel>\` (Feuerix),
+SMB (signiert und standardmäßig verschlüsselt), ohne etwas zu mounten oder Root-Rechte. Hochgeladen wird nach `<Freigabe>\<Unterordner>\<kürzel>\` (Feuerix),
 `…\openslides\` und `…\paperless\`; die Dateigröße wird geprüft. Optional: Aufbewahrung in Tagen (gilt für Feuerix und OpenSlides,
 nicht für den Paperless-Export, der als Abbild gespiegelt wird) und „lokale Kopie nach Upload löschen“. Mit aktivem Ziel gilt eine
 Sicherung erst nach erfolgreichem Upload als aktuell; schlägt der Upload fehl, wird nicht aktualisiert oder gelöscht.
@@ -242,10 +244,13 @@ Datensätze von nie bereitgestellten oder bereits gelöschten Instanzen.
 - **Redis** startet bei neuen Installationen mit Passwort (`REDIS_URL`), damit lokale Benutzer keine Aufträge einreihen können.
 - **Meldungen** (z. B. angezeigte Zugangsdaten) liegen in der serverseitigen Sitzung, nicht im Cookie; die Anmeldung läuft nach
   `SESSION_DAUER_STUNDEN` (Standard 12) ab.
-- **Offene Risiken**, die du kennen solltest: Die Anmeldeseite hat **keine Sperre gegen wiederholte Versuche** (Passwortvalidatoren verlangen
-  mindestens 10 Zeichen; zusätzlich empfehlen sich fail2ban oder ein Reverse-Proxy-Limit). `osmanage` und die Compose-Vorlage von OpenSlides
-  werden ohne Prüfsumme von GitHub geladen. Die SMB-Übertragung ist signiert, aber nicht verschlüsselt (nur im vertrauenswürdigen LAN).
-  Das Feuerix-Repository und die Docker-Images sind Teil der Vertrauenskette: Was dort geändert wird, läuft nach einem Rollout in allen Instanzen.
+- **Anmelde-Sperre**: Nach `LOGIN_MAX_VERSUCHE` (5) Fehlversuchen ist die Anmeldung für `LOGIN_SPERRE_MINUTEN` (15) gesperrt – je Adresse
+  und je Benutzername, auch mit richtigem Passwort. Hast du dich selbst ausgesperrt: `manage.py login_entsperren`. Passwörter müssen
+  mindestens 10 Zeichen haben.
+- **osmanage** wird gegen die SHA-256 des GitHub-Releases geprüft und die Summe gemerkt (`_werkzeuge/osmanage.sha256`); eine später
+  veränderte Datei wird nicht ausgeführt. Soll osmanage bewusst neu geladen werden: `osmanage` und `osmanage.sha256` in `_werkzeuge/` löschen.
+- **SMB** ist signiert und standardmäßig **verschlüsselt** (SMB 3, Option im Backup-Ziel).
+- **Offene Risiken**, die du kennen solltest: Das Feuerix-Repository und die Docker-Images sind Teil der Vertrauenskette: Was dort geändert wird, läuft nach einem Rollout in allen Instanzen.
 - Sicherungen enthalten alle Daten der Instanzen; zusätzlich zu den Dateirechten gehört die Freigabe selbst abgesichert (eigener Benutzer,
   nur Schreibrechte für den Ordner der Sicherungen).
 

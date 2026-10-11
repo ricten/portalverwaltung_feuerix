@@ -1,6 +1,6 @@
 """Backup-Ziel: legt die Sicherungen der Instanzen zusaetzlich auf einer SMB-/CIFS-Netzwerkfreigabe ab (Windows-Freigabe,
 NAS, Samba) - mit Benutzer und Passwort, ohne dass das Portal etwas mounten oder Root-Rechte haben muss
-(Bibliothek smbprotocol, SMB-Signierung ist aktiv). Konfiguriert wird das im Admin unter "Backup-Ziel"."""
+(Bibliothek smbprotocol; SMB-Signierung ist aktiv, die Verschluesselung (SMB 3) ist standardmaessig erzwungen). Konfiguriert wird das im Admin unter "Backup-Ziel"."""
 import ntpath
 import re
 from datetime import datetime, timedelta, timezone
@@ -33,7 +33,8 @@ def _wurzel(ziel):
 
 
 def _verbinden(ziel, smb):
-    smb.register_session(ziel.server, username=ziel.benutzer, password=ziel.passwort, connection_timeout=15)
+    smb.register_session(ziel.server, username=ziel.benutzer, password=ziel.passwort, connection_timeout=15,
+                         encrypt=True if ziel.verschluesselung else None)
 
 
 def _fehler(was, exc):

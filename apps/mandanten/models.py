@@ -276,6 +276,18 @@ _SERVER = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.\-]*[A-Za-z0-9])?$")
 _FREIGABE = re.compile(r'^[^\\/:*?"<>|\x00-\x1f]+$')
 
 
+class LoginSperre(models.Model):
+    """Fehlversuche bei der Anmeldung je Adresse bzw. Benutzername; nach zu vielen ist die Anmeldung kurz gesperrt."""
+    schluessel = models.CharField(max_length=300, unique=True)
+    fehlversuche = models.PositiveIntegerField(default=0)
+    letzter_versuch = models.DateTimeField(auto_now=True)
+    gesperrt_bis = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Anmelde-Sperre"
+        verbose_name_plural = "Anmelde-Sperren"
+
+
 class BackupZiel(models.Model):
     """Einzeilige Einstellung (pk=1): Sicherungen zusaetzlich auf einer SMB-Netzwerkfreigabe ablegen."""
     aktiv = models.BooleanField("Sicherungen auf Netzwerkfreigabe ablegen", default=False,
@@ -292,6 +304,10 @@ class BackupZiel(models.Model):
     benutzer = models.CharField("Benutzer", max_length=200, blank=True,
                                 help_text="Benutzername, mit Domäne z. B. DOMÄNE\\benutzer.")
     passwort = VerschluesseltesTextField("Passwort", blank=True, editable=False)
+    verschluesselung = models.BooleanField(
+        "Übertragung verschlüsseln (SMB 3)", default=True,
+        help_text="Erzwingt eine verschlüsselte Verbindung (SMB 3 mit AES). Nur abschalten, wenn der Server das nicht "
+                  "kann (sehr alte NAS/Samba-Versionen) und das Netz vertrauenswürdig ist.")
     aufbewahrung_tage = models.PositiveIntegerField(
         "Aufbewahrung (Tage)", default=0,
         help_text="Sicherungen auf der Freigabe, die älter sind, werden gelöscht. 0 = nie löschen.")

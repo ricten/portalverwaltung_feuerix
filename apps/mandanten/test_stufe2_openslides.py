@@ -1,4 +1,7 @@
 """Tests fuer OpenSlides je Mandant. Docker/Downloads sind gemockt; den echten Ablauf prueft der CI-Job."""
+import hashlib
+import io
+import json
 import tempfile
 import urllib.error
 from pathlib import Path
@@ -123,10 +126,56 @@ class EinrichtenTests(TestCase):
         with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
             antwort = MagicMock()
             antwort.__enter__.return_value.read.return_value = b"daten"
-            with patch("apps.mandanten.openslides.urllib.request.urlopen", return_value=antwort) as op:
+            with patch("apps.mandanten.openslides.urllib.request.urlopen", return_value=antwort) as op, \
+                    patch("apps.mandanten.openslides.osmanage_pruefsumme", return_value=hashlib.sha256(b"daten").hexdigest()):
                 openslides.werkzeuge_bereitstellen()
                 openslides.werkzeuge_bereitstellen()
             self.assertEqual(op.call_count, 2)   # osmanage + Vorlage, beim zweiten Mal aus dem Cache
+
+    def test_falsche_pruefsumme_verwirft_den_download(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            antwort = MagicMock()
+            antwort.__enter__.return_value.read.return_value = b"manipuliert"
+            with patch("apps.mandanten.openslides.urllib.request.urlopen", return_value=antwort), \
+                    patch("apps.mandanten.openslides.osmanage_pruefsumme", return_value=hashlib.sha256(b"echt").hexdigest()):
+                with self.assertRaises(BereitstellungsFehler):
+                    openslides.werkzeuge_bereitstellen()
+            self.assertFalse((Path(tmp) / "_werkzeuge" / "osmanage").exists())
+
+    def test_veraendertes_osmanage_wird_nicht_ausgefuehrt(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            antwort = MagicMock()
+            antwort.__enter__.return_value.read.return_value = b"daten"
+            with patch("apps.mandanten.openslides.urllib.request.urlopen", return_value=antwort), \
+                    patch("apps.mandanten.openslides.osmanage_pruefsumme", return_value=hashlib.sha256(b"daten").hexdigest()):
+                openslides.werkzeuge_bereitstellen()
+            (Path(tmp) / "_werkzeuge" / "osmanage").write_bytes(b"boese")
+            with self.assertRaises(BereitstellungsFehler):
+                openslides.werkzeuge_bereitstellen()
+
+    def test_bestand_ohne_merkdatei_wird_uebernommen(self):
+        with tempfile.TemporaryDirectory() as tmp, _verz(tmp):
+            verz = Path(tmp) / "_werkzeuge"
+            verz.mkdir()
+            for name in ("osmanage", "docker-compose.yml.tmpl"):
+                (verz / name).write_bytes(b"alt")
+            openslides.werkzeuge_bereitstellen()
+            self.assertTrue((verz / "osmanage.sha256").exists())
+
+    def test_pruefsumme_kommt_aus_dem_github_release(self):
+        summe = "a" * 64
+        antwort = MagicMock()
+        antwort.__enter__.return_value = io.BytesIO(
+            json.dumps({"assets": [{"name": "osmanage", "digest": f"sha256:{summe}"}]}).encode())
+        with patch("apps.mandanten.openslides.urllib.request.urlopen", return_value=antwort):
+            self.assertEqual(openslides.osmanage_pruefsumme(), summe)
+
+    def test_ohne_pruefsumme_im_release_wird_nichts_ausgefuehrt(self):
+        antwort = MagicMock()
+        antwort.__enter__.return_value = io.BytesIO(json.dumps({"assets": [{"name": "osmanage"}]}).encode())
+        with patch("apps.mandanten.openslides.urllib.request.urlopen", return_value=antwort):
+            with self.assertRaises(BereitstellungsFehler):
+                openslides.osmanage_pruefsumme()
 
 
 class StartdatenTests(TestCase):

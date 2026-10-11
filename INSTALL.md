@@ -130,6 +130,13 @@ Anleitung von OpenSlides von Hand).
 3. Superuser-Rechte nur an Personen vergeben, die Zugangsdaten und Sicherungsziele verwalten dürfen. Normale Benutzer brauchen nur
    Änderungsrechte für „Mandanten-Instanzen“.
 
+## Update auf 0.32.0
+
+`git pull`, dann `./venv/bin/python manage.py migrate` (neue Tabelle für die Anmelde-Sperre, neue Option im Backup-Ziel) und
+`sudo systemctl restart portal-web portal-worker`. Wenn das Backup-Ziel danach nicht mehr erreichbar ist, kann der Server kein SMB 3 mit
+Verschlüsselung: im Admin unter **Backup-Ziel** die Option „Übertragung verschlüsseln“ abschalten (nur im vertrauenswürdigen LAN).
+Hast du dich durch Fehlversuche ausgesperrt: `./venv/bin/python manage.py login_entsperren`.
+
 ## Online-Check nachträglich einrichten
 
 Der Installer richtet den Check (alle 5 Minuten) auf Wunsch ein. Bei einer bestehenden Installation:
