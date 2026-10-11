@@ -28,6 +28,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
     "apps.mandanten",
 ]
 
@@ -38,6 +41,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
+    "apps.mandanten.zweifaktor.ZweiFaktorMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -85,6 +90,11 @@ AUTH_PASSWORD_VALIDATORS = [
 MESSAGE_STORAGE = "django.contrib.messages.storage.session.SessionStorage"
 # Anmeldung der Weboberflaeche laeuft nach so vielen Stunden ab (Standard 12).
 SESSION_COOKIE_AGE = int(os.environ.get("SESSION_DAUER_STUNDEN", "12")) * 3600
+
+# Zwei-Faktor-Anmeldung (TOTP, Authenticator-App): "superuser" = Pflicht fuer Superuser (Standard), "alle" = Pflicht fuer
+# alle Benutzer, "aus" = abgeschaltet. Wer ein Geraet eingerichtet hat, muss den Code immer eingeben (ausser bei "aus").
+ZWEI_FAKTOR = os.environ.get("ZWEI_FAKTOR", "superuser")
+OTP_TOTP_ISSUER = "Portalverwaltung Feuerix"
 
 # Anmelde-Sperre: nach so vielen Fehlversuchen (je Adresse bzw. Benutzername) ist die Anmeldung so viele Minuten gesperrt.
 LOGIN_MAX_VERSUCHE = int(os.environ.get("LOGIN_MAX_VERSUCHE", "5"))

@@ -17,5 +17,6 @@ UPDATE_PRUEFUNG_STUNDEN = 0   # Tests: keine automatische Pruefung
 UPDATE_PAUSE_SEKUNDEN = 0
 PORT_PRUEFUNG = False   # Tests: unabhaengig davon, was auf dem Rechner gerade laeuft (gezielt einschaltbar)
 UPDATE_DIENSTE_PRUEFEN = False   # Tests: kein Zugriff auf GitHub (Tests schalten es gezielt ein)
+ZWEI_FAKTOR = "aus"   # Tests: Admin-Tests melden sich ohne zweiten Faktor an (test_zweifaktor schaltet ihn gezielt ein)
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True

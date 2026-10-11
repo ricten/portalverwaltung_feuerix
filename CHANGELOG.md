@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.33.0 (2026-10-12)
+- **Zwei-Faktor-Anmeldung (2FA)** für die Weboberfläche: Authenticator-App (TOTP, z. B. Google/Microsoft Authenticator, Aegis, FreeOTP) plus
+  10 Einmal-Notfallcodes. **Superuser müssen sie nutzen** (beim nächsten Login: QR-Code scannen, Code bestätigen, Notfallcodes sichern); andere
+  Benutzer können sie freiwillig einrichten (Link „Zwei-Faktor“ oben rechts) und müssen den Code dann immer eingeben. Einstellung
+  `ZWEI_FAKTOR=superuser|alle|aus`. Handy verloren: `manage.py zwei_faktor_zuruecksetzen BENUTZER`. Falsche Codes werden von django-otp
+  mit wachsender Wartezeit gebremst. Neue Pakete `django-otp` und `segno` (`pip install -r requirements.txt`), Migration für die Geräte-Tabellen.
+
 ## 0.32.0 (2026-10-12)
 Restliche Punkte der Sicherheitsprüfung:
 - **Anmelde-Sperre**: Nach 5 Fehlversuchen (je Adresse und je Benutzername, einstellbar mit `LOGIN_MAX_VERSUCHE`) ist die Anmeldung

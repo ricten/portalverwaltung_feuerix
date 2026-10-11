@@ -128,6 +128,7 @@ im Projektverzeichnis selbst, bereits gesetzte Umgebungsvariablen (systemd) habe
 | `UPDATE_DIENSTE_PRUEFEN` | 1 | Versionen von Paperless/OpenSlides erfassen und auf GitHub nach neuen Releases schauen |
 | `UPDATE_BACKUP_MAX_ALTER_STUNDEN` | 24 | höchstes Alter einer Sicherung, ab dem vor einem Update neu gesichert wird |
 | `SESSION_DAUER_STUNDEN` | 12 | Dauer der Anmeldung in der Weboberfläche |
+| `ZWEI_FAKTOR` | superuser | `superuser` (Pflicht für Superuser), `alle`, `aus` |
 | `LOGIN_MAX_VERSUCHE` / `LOGIN_SPERRE_MINUTEN` | 5 / 15 | Fehlversuche bis zur Sperre / Dauer der Sperre |
 | `LOG_AUFBEWAHRUNG_TAGE` | 90 | Aufbewahrung des Gesamtlogs (0 = nie löschen) |
 | `PROXY_NUR_HTTP` | 0 | nur für Tests/lokal: Caddy ohne Zertifikate |
@@ -145,6 +146,7 @@ Alles Wichtige geht im Admin; für Skripte, Cron und Notfälle gibt es `./venv/b
 | `mandant_demo_zuruecksetzen <kürzel> [--standard-speichern]` | Demo-Instanz auf den Demo-Standard zurücksetzen bzw. den jetzigen Stand als Standard speichern |
 | `mandant_dienst <kürzel> stop\|start\|restart` | Instanz samt Paperless/OpenSlides anhalten, starten, neu starten |
 | `env_entschluesseln <datei> [--ausgabe .env]` | die mit der Sicherung abgelegte, verschlüsselte `.env` wieder lesbar machen |
+| `zwei_faktor_zuruecksetzen BENUTZER` | Entfernt Authenticator-App und Notfallcodes (Handy verloren) |
 | `login_entsperren` | Hebt alle Anmelde-Sperren auf |
 | `rechte_haerten` | Dateirechte im Instanzverzeichnis korrigieren (Ordner 0700, `.env` 0600); läuft auch beim Online-Check |
 | `mandant_backup [kürzel]` | vollständige Sicherung (Feuerix, Paperless-Export, OpenSlides-Dump) |
@@ -244,6 +246,10 @@ Datensätze von nie bereitgestellten oder bereits gelöschten Instanzen.
 - **Redis** startet bei neuen Installationen mit Passwort (`REDIS_URL`), damit lokale Benutzer keine Aufträge einreihen können.
 - **Meldungen** (z. B. angezeigte Zugangsdaten) liegen in der serverseitigen Sitzung, nicht im Cookie; die Anmeldung läuft nach
   `SESSION_DAUER_STUNDEN` (Standard 12) ab.
+- **Zwei-Faktor-Anmeldung (2FA)**: TOTP per Authenticator-App und Einmal-Notfallcodes. Pflicht für Superuser (Standard), freiwillig für
+  andere; `ZWEI_FAKTOR=superuser|alle|aus`. Einrichtung beim nächsten Login (QR-Code scannen), Verwaltung über „Zwei-Faktor“ oben rechts.
+  Verlorenes Gerät: `manage.py zwei_faktor_zuruecksetzen BENUTZER`. Notfallcodes sicher aufbewahren (Passwortmanager) - der erste Superuser
+  ohne Gerät und ohne Notfallcodes kann sich sonst nur über den Server-Befehl wieder Zugang verschaffen.
 - **Anmelde-Sperre**: Nach `LOGIN_MAX_VERSUCHE` (5) Fehlversuchen ist die Anmeldung für `LOGIN_SPERRE_MINUTEN` (15) gesperrt – je Adresse
   und je Benutzername, auch mit richtigem Passwort. Hast du dich selbst ausgesperrt: `manage.py login_entsperren`. Passwörter müssen
   mindestens 10 Zeichen haben.

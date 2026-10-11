@@ -130,6 +130,14 @@ Anleitung von OpenSlides von Hand).
 3. Superuser-Rechte nur an Personen vergeben, die Zugangsdaten und Sicherungsziele verwalten dürfen. Normale Benutzer brauchen nur
    Änderungsrechte für „Mandanten-Instanzen“.
 
+## Update auf 0.33.0 (Zwei-Faktor-Anmeldung)
+
+`git pull`, dann `./venv/bin/pip install -r requirements.txt`, `./venv/bin/python manage.py migrate` und
+`sudo systemctl restart portal-web portal-worker`. **Superuser werden beim nächsten Login zur Einrichtung geführt**: Authenticator-App auf dem
+Handy bereithalten, QR-Code scannen, Code eingeben und die Notfallcodes speichern. Zum Abschalten `ZWEI_FAKTOR=aus` in die `.env`.
+Ausgesperrt (Handy weg, keine Codes): `./venv/bin/python manage.py zwei_faktor_zuruecksetzen BENUTZERNAME`.
+Die Uhr des Servers und des Handys muss stimmen, sonst passen die Codes nicht.
+
 ## Update auf 0.32.0
 
 `git pull`, dann `./venv/bin/python manage.py migrate` (neue Tabelle für die Anmelde-Sperre, neue Option im Backup-Ziel) und

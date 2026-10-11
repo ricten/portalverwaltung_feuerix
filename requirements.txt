@@ -6,3 +6,5 @@ cryptography>=42
 gunicorn>=22
 whitenoise>=6.7
 smbprotocol>=1.10
+django-otp>=1.5
+segno>=1.6

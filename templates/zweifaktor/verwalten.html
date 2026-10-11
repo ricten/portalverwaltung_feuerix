@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  {% if aktiviert %}<p><strong>Die Zwei-Faktor-Anmeldung ist aktiv.</strong></p>{% else %}
+  <p>Die Zwei-Faktor-Anmeldung ist <strong>aktiv</strong>. Unbenutzte Notfallcodes: {{ uebrig }}.</p>{% endif %}
+  {% if neu_codes %}
+  <h2>Notfallcodes</h2>
+  <p>Bewahre sie sicher auf (z. B. im Passwortmanager). Sie werden <strong>nur jetzt</strong> angezeigt; jeder gilt einmal, falls das Handy verloren geht.</p>
+  <pre style="font-size:16px;background:var(--darkened-bg,#f5f5f5);padding:12px;display:inline-block">{% for c in neu_codes %}{{ c }}
+{% endfor %}</pre>
+  <p><a href="{% url 'admin:index' %}">Weiter zum Portal</a></p>
+  {% else %}
+  <form method="post">{% csrf_token %}
+    <p><input type="submit" value="Neue Notfallcodes erzeugen (die alten verfallen)"></p>
+  </form>
+  <p>Handy verloren? Ein Superuser kann die Anmeldung zurücksetzen: <code>manage.py zwei_faktor_zuruecksetzen BENUTZER</code>
+  (oder im Admin unter „TOTP-Geräte“ das Gerät löschen).</p>
+  {% endif %}
+</div>
+{% endblock %}

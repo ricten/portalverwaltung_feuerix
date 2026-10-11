@@ -38,7 +38,9 @@ Zustand in der Tabelle `UpdateZustand` (eine Zeile), Hinweis in `templates/admin
   sieht, sie ausführen); jede eigene Admin-Ansicht prüft das Recht selbst. Betreiber-Einstellungen (Backup-Ziel, Mailserver) nur für Superuser.
   Dateien mit Geheimnissen über `rechte.geheim_schreiben()` schreiben, Ordner über `basis.instanz_verzeichnis()` anlegen (0700). Nie Passwörter
   in Befehlszeilen (stdin nutzen) oder Cookies/Meldungen im Klartext ablegen, die nicht ausdrücklich dafür gedacht sind.
-  Regressionstests: `apps/mandanten/test_sicherheit.py`, `test_haertung.py`. Die Anmeldung läuft über `loginsperre.SperrBackend` (Sperre nach
+  Regressionstests: `apps/mandanten/test_sicherheit.py`, `test_haertung.py`, `test_zweifaktor.py`. 2FA: `zweifaktor.py` (Middleware + Ansichten,
+  `ZWEI_FAKTOR`); neue eigene Seiten außerhalb von `/admin/` sind durch die Middleware mitgeschützt, Ausnahmen nur über `FREI`. Tests laufen mit
+  `ZWEI_FAKTOR="aus"` (settings_sqlite). Die Anmeldung läuft über `loginsperre.SperrBackend` (Sperre nach
   Fehlversuchen, `AUTHENTICATION_BACKENDS`); heruntergeladene Programme (osmanage) nur mit Prüfsumme ausführen.
 
 ## Dokumentation
