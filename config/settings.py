@@ -81,6 +81,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Meldungen (z. B. angezeigte Zugangsdaten) in der serverseitigen Sitzung halten, nicht in einem Cookie im Browser.
+MESSAGE_STORAGE = "django.contrib.messages.storage.session.SessionStorage"
+# Anmeldung der Weboberflaeche laeuft nach so vielen Stunden ab (Standard 12).
+SESSION_COOKIE_AGE = int(os.environ.get("SESSION_DAUER_STUNDEN", "12")) * 3600
+
 LANGUAGE_CODE = "de"
 TIME_ZONE = "Europe/Berlin"
 USE_I18N = True

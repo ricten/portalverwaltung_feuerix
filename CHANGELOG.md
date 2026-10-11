@@ -4,6 +4,28 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.31.0 (2026-10-12)
+**Sicherheitsprüfung des Codes - behobene Schwachstellen** (Abhängigkeiten geprüft: keine bekannten Schwachstellen; Eingaben, die in `.env`
+und Caddyfile fließen, werden bereits streng validiert; keine Shell-Aufrufe, keine rohen SQL-Abfragen):
+- **Hoch: Admin-Aktionen ohne Rechteprüfung.** Jeder Benutzer, der die Instanzliste sehen durfte (auch nur mit Leserecht), konnte Aktionen wie
+  Stoppen, Sichern, Aktualisieren ausführen. Alle Aktionen sind jetzt an das Änderungsrecht gebunden; Zugangsdaten anzeigen, Admin-Passwort
+  zurücksetzen, Wiederherstellen, endgültig Löschen und „Hängende Instanz zurücksetzen“ nur noch für Superuser (Zugangsdaten und Passwort-Reset
+  waren vorher ein Weg, sich Administratorrechte in jeder Instanz zu verschaffen).
+- **Hoch: Backup-Ziel und Benachrichtigung** (Ziel aller Sicherungen bzw. Mailserver) konnte jeder Benutzer mit Änderungsrecht umstellen, also
+  etwa alle Sicherungen auf einen fremden Server umleiten. Beides ist jetzt nur für Superuser sichtbar und änderbar.
+- **Mittel: Geheimnisse auf der Platte.** Die `.env`-Dateien der Instanzen (Schlüssel, Passwörter), Dumps und Sicherungen waren für andere
+  Benutzer des Servers lesbar. Instanzordner sind jetzt 0700, `.env`-Dateien und Dumps 0600 (von Anfang an, ohne Zeitfenster mit offenen Rechten).
+  Bestehende Installationen werden mit `manage.py rechte_haerten` (läuft auch automatisch beim Online-Check) korrigiert; Paperlesss Ordner
+  `export`/`consume` bleiben unverändert, weil dort der Container schreibt.
+- **Mittel: Redis ohne Passwort.** Jeder lokale Benutzer hätte Celery-Aufträge einreihen können. Neue Installationen starten Redis mit Passwort
+  (in `REDIS_URL`); für bestehende siehe INSTALL.md.
+- **Niedrig:** Weiterleitung nach Aktionen folgte dem `Referer` ungeprüft (Open Redirect) - jetzt nur auf die eigene Seite. Meldungen mit
+  angezeigten Zugangsdaten lagen in einem Browser-Cookie - jetzt in der serverseitigen Sitzung. Die Anmeldung läuft nach 12 Stunden ab
+  (`SESSION_DAUER_STUNDEN`).
+- Nicht geändert, aber in der README unter „Sicherheit“ beschrieben: kein Schutz gegen wiederholte Anmeldeversuche (Sperre empfohlen),
+  `osmanage` wird ohne Prüfsumme von GitHub geladen, SMB-Übertragung ist signiert, aber nicht verschlüsselt.
+- Migration: keine.
+
 ## 0.30.0 (2026-10-12)
 - Neu: **Demo zurücksetzen.** Direkt nach dem Anlegen der Beispieldaten speichert das Portal den **Demo-Standard** (Datenbank und Medien
   in `instanzen/<kürzel>/demo-standard/`, bei aktivem Backup-Ziel zusätzlich auf der Freigabe). Die Aktion **„Demo auf Standard zurücksetzen“**

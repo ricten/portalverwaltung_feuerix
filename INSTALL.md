@@ -113,6 +113,23 @@ normaler `git clone`), gehört dem Dienstbenutzer, und der Server erreicht GitHu
 mit dem Pfeil-Knopf in der Spalte „Version“ (OpenSlides nur für Patch-Versionen, z. B. 4.3.0 → 4.3.5; größere Sprünge bitte nach der
 Anleitung von OpenSlides von Hand).
 
+## Sicherheit nach einem Update auf 0.31.0 (bestehende Installation)
+
+1. **Dateirechte** korrigieren (neue Installationen sind schon richtig): `./venv/bin/python manage.py rechte_haerten`. Meldet der Befehl
+   einen Fehler bei einem Ordner, gehört er vermutlich `root` (nach einem Installer-Lauf mit `sudo`): `sudo chown -R $USER: /opt/verein/instanzen`
+   und den Befehl wiederholen.
+2. **Redis mit Passwort** (neue Installationen haben es): Passwort erzeugen, den Container neu anlegen und die `.env` anpassen:
+   ```bash
+   PW=$(python3 -c "import secrets,string;print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(32)))")
+   docker rm -f portal-redis
+   docker run -d --name portal-redis --restart unless-stopped -p 127.0.0.1:6379:6379 redis:7-alpine redis-server --requirepass "$PW"
+   sed -i "s#^REDIS_URL=.*#REDIS_URL=redis://:$PW@127.0.0.1:6379/1#" /opt/verein/.env
+   sudo systemctl restart portal-web portal-worker
+   ```
+   Laufende Aufträge gehen dabei verloren; also nur ausführen, wenn keine Instanz „In Arbeit“ ist.
+3. Superuser-Rechte nur an Personen vergeben, die Zugangsdaten und Sicherungsziele verwalten dürfen. Normale Benutzer brauchen nur
+   Änderungsrechte für „Mandanten-Instanzen“.
+
 ## Online-Check nachträglich einrichten
 
 Der Installer richtet den Check (alle 5 Minuten) auf Wunsch ein. Bei einer bestehenden Installation:

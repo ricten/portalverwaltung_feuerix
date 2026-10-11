@@ -27,10 +27,17 @@ def zufallswert(laenge=50):
 
 
 def instanz_verzeichnis(mandant, unterordner=None):
-    pfad = Path(settings.INSTANZEN_VERZEICHNIS) / mandant.kuerzel
+    from . import rechte
+    wurzel = Path(settings.INSTANZEN_VERZEICHNIS)
+    pfad = wurzel / mandant.kuerzel
     if unterordner:
         pfad = pfad / unterordner
     pfad.mkdir(parents=True, exist_ok=True)
+    for ordner in (wurzel, wurzel / mandant.kuerzel, pfad):      # Geheimnisse und Sicherungen: nur der Dienstbenutzer
+        try:
+            rechte.verzeichnis_sichern(ordner)
+        except OSError:
+            pass            # gehoert jemand anderem (z. B. root) - "manage.py rechte_haerten" nennt es
     return pfad
 
 

@@ -23,7 +23,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 
-from . import basis, dienstversionen, openslides, paperless, proxy
+from . import basis, dienstversionen, openslides, paperless, proxy, rechte
 from .basis import BereitstellungsFehler, docker, instanz_verzeichnis
 from .validatoren import gueltige_domain, keine_env_sonderzeichen
 
@@ -114,7 +114,7 @@ def env_erzeugen(mandant):
         verein_name=mandant.verein_name, openslides_domain=mandant.openslides_domain,
         paperless_domain=mandant.paperless_domain)
     env_pfad = instanz_verzeichnis(mandant) / ".env"
-    env_pfad.write_text(inhalt, encoding="utf-8")
+    rechte.geheim_schreiben(env_pfad, inhalt)         # 0600: enthaelt alle Schluessel und Passwoerter der Instanz
     mandant.protokollieren(f".env erzeugt unter {env_pfad}")
     return env_pfad
 

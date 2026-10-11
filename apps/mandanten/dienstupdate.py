@@ -10,7 +10,7 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless
+from . import backupziel, basis, benachrichtigung, dienstversionen, openslides, paperless, rechte
 from .basis import WARTESCHLANGE_DIENST, BereitstellungsFehler
 from .dienstversionen import NAMEN
 from .models import UpdateZustand
@@ -61,7 +61,7 @@ def openslides_dump(mandant, markierung, bezeichnung="OpenSlides: Datenbank-Dump
     ziel = verz / "backups"
     ziel.mkdir(exist_ok=True)
     datei = ziel / f"openslides-{markierung}-{datetime.now():%Y%m%d-%H%M%S}.sql"
-    datei.write_text(dump, encoding="utf-8")
+    rechte.geheim_schreiben(datei, dump)            # der Dump enthaelt alle Daten der Versammlung
     mandant.protokollieren(f"OpenSlides-Datenbank gesichert in {datei}.")
     _auf_freigabe(mandant, ziel, "openslides")
     mandant.openslides_sicherung_am = timezone.now()

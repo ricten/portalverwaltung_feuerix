@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from . import backupziel, benachrichtigung, betrieb, gesamtlog
+from . import backupziel, benachrichtigung, betrieb, gesamtlog, rechte
 from .basis import BereitstellungsFehler
 from .models import BackupZiel, MandantInstanz
 
@@ -106,4 +106,8 @@ def alle_pruefen(timeout=5):
     MandantInstanz.objects.exclude(status="laeuft").exclude(online__isnull=True).update(
         online=None, offline_seit=None, offline_mail_gesendet=False)
     gesamtlog.aufraeumen()
+    try:
+        rechte.haerten()        # Ordner/.env, die andere Werkzeuge mit offenen Rechten angelegt haben
+    except Exception:
+        pass
     return {"instanzen": ergebnis, "backupziel": backupziel_pruefen()}

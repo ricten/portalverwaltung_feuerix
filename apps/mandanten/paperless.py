@@ -11,7 +11,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-from . import basis
+from . import basis, rechte
 from .basis import BereitstellungsFehler
 
 
@@ -63,10 +63,10 @@ def env_erzeugen(mandant):
     if geaendert:
         mandant.save(update_fields=geaendert)
     pfad = _verzeichnis(mandant) / ".env"
-    pfad.write_text(_ENV.format(
+    rechte.geheim_schreiben(pfad, _ENV.format(
         secret_key=mandant.paperless_secret_key, postgres_passwort=mandant.paperless_postgres_passwort,
         port=mandant.paperless_port, url=url(mandant), admin_benutzername=mandant.admin_benutzername,
-        admin_passwort=mandant.paperless_admin_passwort, admin_email=mandant.admin_email), encoding="utf-8")
+        admin_passwort=mandant.paperless_admin_passwort, admin_email=mandant.admin_email))
     mandant.protokollieren("Paperless: .env erzeugt.")
     return pfad
 

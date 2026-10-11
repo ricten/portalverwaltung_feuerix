@@ -60,6 +60,7 @@ python3 -m venv venv
 
 if [ ! -f .env ]; then
   DBPW=$(zufall 32)
+  REDISPW=$(zufall 32)
   FEKEY=$(./venv/bin/python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())")
   cat > .env <<EOF
 SECRET_KEY=$(zufall 60)
@@ -69,7 +70,7 @@ POSTGRES_USER=portal
 POSTGRES_PASSWORD=$DBPW
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
-REDIS_URL=redis://127.0.0.1:6379/1
+REDIS_URL=redis://:$REDISPW@127.0.0.1:6379/1
 DEBUG=0
 ALLOWED_HOSTS=localhost,127.0.0.1${PORTAL_DOMAIN:+,$PORTAL_DOMAIN}
 HTTPS=$([ -n "$PORTAL_DOMAIN" ] && echo 1 || echo 0)
@@ -89,13 +90,18 @@ else
   echo ">>> Vorhandene .env bleibt unveraendert."
 fi
 set -a; . ./.env; set +a
+mkdir -p "$DIR/instanzen" && chmod 700 "$DIR/instanzen"      # Geheimnisse und Sicherungen der Instanzen
 
 if [ "$MIT_DB" = 1 ]; then
   docker start portal-postgres >/dev/null 2>&1 || docker run -d --name portal-postgres --restart unless-stopped \
     -e POSTGRES_DB="$POSTGRES_DB" -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
     -p 127.0.0.1:5432:5432 -v portal-pgdata:/var/lib/postgresql postgres:18 >/dev/null
+  # Redis nur mit Passwort (aus REDIS_URL der .env): sonst koennte jeder lokale Benutzer Celery-Auftraege einreihen
+  REDIS_PW=""
+  case "$REDIS_URL" in redis://:*@*) REDIS_PW="${REDIS_URL#redis://:}"; REDIS_PW="${REDIS_PW%%@*}";; esac
+  REDIS_ARGS=(); [ -n "$REDIS_PW" ] && REDIS_ARGS=(--requirepass "$REDIS_PW")
   docker start portal-redis >/dev/null 2>&1 || docker run -d --name portal-redis --restart unless-stopped \
-    -p 127.0.0.1:6379:6379 redis:7-alpine >/dev/null
+    -p 127.0.0.1:6379:6379 redis:7-alpine redis-server "${REDIS_ARGS[@]}" >/dev/null
   echo ">>> Warte auf PostgreSQL ..."
   for i in $(seq 1 30); do docker exec portal-postgres pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1 && break; sleep 2; done
 fi

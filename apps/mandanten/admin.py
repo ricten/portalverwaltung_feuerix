@@ -3,6 +3,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect, JsonResponse
 from django.urls import path, reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
@@ -50,6 +51,11 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        "protokoll", "feuerix_version", "paperless_version", "openslides_version",
                        "erstellt_am", "aktualisiert_am")
     form = MandantForm
+
+    def has_superuser_permission(self, request):
+        """Fuer Aktionen, die Zugangsdaten zeigen oder Daten ersetzen/loeschen: nur Superuser (Django prueft das pro Aktion)."""
+        return request.user.is_superuser
+
     actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "demo_zuruecksetzen", "demo_standard_speichern", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
@@ -198,7 +204,10 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         return TemplateResponse(request, "admin/mandanten/endgueltig_loeschen.html", kontext)
 
     def _zurueck(self, request):
-        return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("admin:index"))
+        ziel = request.META.get("HTTP_REFERER", "")
+        if not url_has_allowed_host_and_scheme(ziel, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            ziel = reverse("admin:index")     # nie auf fremde Adressen weiterleiten (Open Redirect)
+        return HttpResponseRedirect(ziel)
 
     def update_pruefen_view(self, request):
         if request.method != "POST":
@@ -452,7 +461,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         self.message_user(request, f"{text} für {queryset.count()} Instanz(en) gestartet - Fortschritt siehe "
                                    "Spalte „Fortschritt“ und Protokoll der Instanz.", messages.INFO)
 
-    @admin.action(description="Bereitstellen / erneut bereitstellen")
+    @admin.action(permissions=["change"], description="Bereitstellen / erneut bereitstellen")
     def bereitstellen(self, request, queryset):
         for m in queryset:
             # sofort sichtbar machen, damit die Oberflaeche den Fortschritt live anzeigen kann
@@ -477,19 +486,19 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"{text} gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
 
-    @admin.action(description="Starten (gestoppte/stillgelegte Instanz)")
+    @admin.action(permissions=["change"], description="Starten (gestoppte/stillgelegte Instanz)")
     def starten(self, request, queryset):
         self._steuern(request, queryset, *self.DIENSTE["starten"][:3])
 
-    @admin.action(description="Stoppen (Container anhalten, Daten bleiben)")
+    @admin.action(permissions=["change"], description="Stoppen (Container anhalten, Daten bleiben)")
     def stoppen(self, request, queryset):
         self._steuern(request, queryset, *self.DIENSTE["stoppen"][:3])
 
-    @admin.action(description="Neustarten")
+    @admin.action(permissions=["change"], description="Neustarten")
     def neustarten(self, request, queryset):
         self._steuern(request, queryset, *self.DIENSTE["neustarten"][:3])
 
-    @admin.action(description="Instanz stilllegen (Container entfernen, Daten behalten)")
+    @admin.action(permissions=["change"], description="Instanz stilllegen (Container entfernen, Daten behalten)")
     def stilllegen(self, request, queryset):
         gestartet = []
         for m in queryset:
@@ -505,7 +514,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
 
-    @admin.action(description="Demo auf Standard zurücksetzen (ersetzt alle Daten der Instanz)")
+    @admin.action(permissions=["change"], description="Demo auf Standard zurücksetzen (ersetzt alle Daten der Instanz)")
     def demo_zuruecksetzen(self, request, queryset):
         gestartet = []
         for m in queryset:
@@ -521,7 +530,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"Demo wird zurückgesetzt: {', '.join(gestartet)} - Fortschritt siehe Spalte „Fortschritt“.",
                               messages.INFO)
 
-    @admin.action(description="Aktuellen Stand als Demo-Standard speichern")
+    @admin.action(permissions=["change"], description="Aktuellen Stand als Demo-Standard speichern")
     def demo_standard_speichern(self, request, queryset):
         gestartet = []
         for m in queryset:
@@ -548,7 +557,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             return "noch kein Demo-Standard gespeichert (Aktion „Aktuellen Stand als Demo-Standard speichern“)."
         return None
 
-    @admin.action(description="Beispieldaten anlegen (nur Demo-Instanzen)")
+    @admin.action(permissions=["change"], description="Beispieldaten anlegen (nur Demo-Instanzen)")
     def beispieldaten(self, request, queryset):
         gestartet = []
         for m in queryset:
@@ -569,7 +578,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"Beispieldaten werden angelegt für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
 
-    @admin.action(description="Hängende Instanz zurücksetzen („In Arbeit“ beenden)")
+    @admin.action(permissions=["superuser"], description="Hängende Instanz zurücksetzen („In Arbeit“ beenden)")
     def haengende_zuruecksetzen(self, request, queryset):
         if not request.user.is_superuser:
             self.message_user(request, "Nur Superuser dürfen den Status zurücksetzen.", messages.ERROR)
@@ -584,25 +593,25 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"{m.kuerzel}: zurückgesetzt, tatsächlicher Zustand: {m.get_status_display()}.",
                               messages.SUCCESS if neu == "laeuft" else messages.INFO)
 
-    @admin.action(description="Aus Sicherung wiederherstellen ...")
+    @admin.action(permissions=["superuser"], description="Aus Sicherung wiederherstellen ...")
     def wiederherstellen(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(request, "Bitte genau eine Instanz zum Wiederherstellen auswählen.", messages.WARNING)
             return None
         return HttpResponseRedirect(reverse("admin:mandanten_wiederherstellen", args=[queryset.first().pk]))
 
-    @admin.action(description="Instanz ENDGÜLTIG löschen (mit Abschlusssicherung) ...")
+    @admin.action(permissions=["superuser"], description="Instanz ENDGÜLTIG löschen (mit Abschlusssicherung) ...")
     def endgueltig_loeschen(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(request, "Bitte genau eine Instanz zum Löschen auswählen.", messages.WARNING)
             return None
         return HttpResponseRedirect(reverse("admin:mandanten_loeschen", args=[queryset.first().pk]))
 
-    @admin.action(description="Sichern (Feuerix, Paperless, OpenSlides)")
+    @admin.action(permissions=["change"], description="Sichern (Feuerix, Paperless, OpenSlides)")
     def sichern(self, request, queryset):
         self._starten(request, queryset, tasks.mandant_backup_task, "Sicherung")
 
-    @admin.action(description="Auf aktuellen Feuerix-Code aktualisieren")
+    @admin.action(permissions=["change"], description="Auf aktuellen Feuerix-Code aktualisieren")
     def aktualisieren(self, request, queryset):
         gestartet = []
         for m in queryset:
@@ -618,7 +627,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(request, f"Update gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
 
-    @admin.action(description="Zugangsdaten des Instanz-Administrators anzeigen")
+    @admin.action(permissions=["superuser"], description="Zugangsdaten des Instanz-Administrators anzeigen")
     def zugangsdaten_anzeigen(self, request, queryset):
         if not request.user.is_superuser:
             self.message_user(request, "Nur Superuser dürfen Zugangsdaten einsehen.", messages.ERROR)
@@ -634,7 +643,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                          f"{m.admin_passwort} (Stand der Bereitstellung; nach einer Änderung in Feuerix selbst "
                          "bitte „zurücksetzen“ nutzen).", messages.WARNING)
 
-    @admin.action(description="Admin-Passwort der Instanz zurücksetzen")
+    @admin.action(permissions=["superuser"], description="Admin-Passwort der Instanz zurücksetzen")
     def admin_passwort_zuruecksetzen(self, request, queryset):
         for m in queryset:
             try:
@@ -691,6 +700,17 @@ class BackupZielAdmin(admin.ModelAdmin):
                                   if obj.letzter_upload_am else "noch keiner"))
         return format_html("<br>".join("{}" for _ in zeilen), *zeilen)
 
+    # Betreiber-Einstellung (Ziel aller Sicherungen bzw. Mailserver): nur Superuser - sonst koennte jeder Benutzer mit
+    # Aenderungsrecht die Sicherungen auf einen fremden Server umleiten.
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
     def has_add_permission(self, request):
         return False
 
@@ -742,6 +762,17 @@ class BenachrichtigungAdmin(admin.ModelAdmin):
         ("Status", {"fields": ["letzte_mail_am", "letzter_fehler"]}),
     ]
     readonly_fields = ["letzte_mail_am", "letzter_fehler"]
+
+    # Betreiber-Einstellung (Ziel aller Sicherungen bzw. Mailserver): nur Superuser - sonst koennte jeder Benutzer mit
+    # Aenderungsrecht die Sicherungen auf einen fremden Server umleiten.
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def has_add_permission(self, request):
         return False

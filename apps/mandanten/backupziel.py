@@ -8,6 +8,7 @@ from pathlib import Path
 
 from django.utils import timezone as django_zeit
 
+from . import rechte
 from .basis import BereitstellungsFehler
 from .models import BackupZiel
 
@@ -98,6 +99,10 @@ def herunterladen(mandant, name, zielordner, unterordner=""):
                 senke.write(stueck)
         if lokal.stat().st_size != erwartet:
             raise BereitstellungsFehler(f"{name}: Größe nach dem Herunterladen stimmt nicht")
+        try:
+            rechte.datei_sichern(lokal)
+        except OSError:
+            pass
     except BereitstellungsFehler:
         raise
     except Exception as e:

@@ -127,6 +127,7 @@ im Projektverzeichnis selbst, bereits gesetzte Umgebungsvariablen (systemd) habe
 | `UPDATE_PAUSE_SEKUNDEN` | 10 | Pause zwischen den Instanzen beim Rollout |
 | `UPDATE_DIENSTE_PRUEFEN` | 1 | Versionen von Paperless/OpenSlides erfassen und auf GitHub nach neuen Releases schauen |
 | `UPDATE_BACKUP_MAX_ALTER_STUNDEN` | 24 | höchstes Alter einer Sicherung, ab dem vor einem Update neu gesichert wird |
+| `SESSION_DAUER_STUNDEN` | 12 | Dauer der Anmeldung in der Weboberfläche |
 | `LOG_AUFBEWAHRUNG_TAGE` | 90 | Aufbewahrung des Gesamtlogs (0 = nie löschen) |
 | `PROXY_NUR_HTTP` | 0 | nur für Tests/lokal: Caddy ohne Zertifikate |
 
@@ -143,6 +144,7 @@ Alles Wichtige geht im Admin; für Skripte, Cron und Notfälle gibt es `./venv/b
 | `mandant_demo_zuruecksetzen <kürzel> [--standard-speichern]` | Demo-Instanz auf den Demo-Standard zurücksetzen bzw. den jetzigen Stand als Standard speichern |
 | `mandant_dienst <kürzel> stop\|start\|restart` | Instanz samt Paperless/OpenSlides anhalten, starten, neu starten |
 | `env_entschluesseln <datei> [--ausgabe .env]` | die mit der Sicherung abgelegte, verschlüsselte `.env` wieder lesbar machen |
+| `rechte_haerten` | Dateirechte im Instanzverzeichnis korrigieren (Ordner 0700, `.env` 0600); läuft auch beim Online-Check |
 | `mandant_backup [kürzel]` | vollständige Sicherung (Feuerix, Paperless-Export, OpenSlides-Dump) |
 | `mandant_update_pruefen [--ausrollen]` | auf ein neues Feuerix prüfen, auf Wunsch sofort ausrollen (mit Sicherung vorab) |
 | `mandant_update [--git-pull] [--pause N]` | Feuerix-Code gestaffelt auf alle laufenden Instanzen ausrollen (ohne Sicherungsprüfung) |
@@ -232,8 +234,20 @@ Datensätze von nie bereitgestellten oder bereits gelöschten Instanzen.
   ausdrückliche Aktion „Zugangsdaten anzeigen“ für Superuser, im Gesamtlog vermerkt).
 - Die Admin-API von Caddy gibt vollen Zugriff auf Caddy – nur auf localhost erreichbar lassen. Die Ports von Instanzen und
   Zusatzdiensten sind nur an `127.0.0.1` gebunden; der öffentliche Zugriff läuft ausschließlich über den Reverse Proxy.
-- Sicherungen enthalten alle Daten der Instanzen. Das Portal setzt auf diese Dateien keine besonderen Dateirechte – den
-  Zugriff auf `instanzen/` bitte über die Rechte des Servers einschränken.
+- **Rechte in der Weboberfläche**: Alle Aktionen verlangen das Änderungsrecht; Zugangsdaten anzeigen, Passwort zurücksetzen, Wiederherstellen,
+  endgültig Löschen und „Hängende Instanz zurücksetzen“ nur Superuser. **Backup-Ziel** und **Benachrichtigungen** sehen und ändern nur Superuser
+  (sonst ließen sich Sicherungen umleiten). Vergib Superuser-Rechte sparsam.
+- **Dateirechte**: `instanzen/` und jeder Instanzordner sind 0700, `.env`-Dateien und Dumps 0600; `manage.py rechte_haerten` (und der Online-Check)
+  korrigiert bestehende Installationen. Paperlesss `export`/`consume` bleiben unberührt (der Container schreibt dort).
+- **Redis** startet bei neuen Installationen mit Passwort (`REDIS_URL`), damit lokale Benutzer keine Aufträge einreihen können.
+- **Meldungen** (z. B. angezeigte Zugangsdaten) liegen in der serverseitigen Sitzung, nicht im Cookie; die Anmeldung läuft nach
+  `SESSION_DAUER_STUNDEN` (Standard 12) ab.
+- **Offene Risiken**, die du kennen solltest: Die Anmeldeseite hat **keine Sperre gegen wiederholte Versuche** (Passwortvalidatoren verlangen
+  mindestens 10 Zeichen; zusätzlich empfehlen sich fail2ban oder ein Reverse-Proxy-Limit). `osmanage` und die Compose-Vorlage von OpenSlides
+  werden ohne Prüfsumme von GitHub geladen. Die SMB-Übertragung ist signiert, aber nicht verschlüsselt (nur im vertrauenswürdigen LAN).
+  Das Feuerix-Repository und die Docker-Images sind Teil der Vertrauenskette: Was dort geändert wird, läuft nach einem Rollout in allen Instanzen.
+- Sicherungen enthalten alle Daten der Instanzen; zusätzlich zu den Dateirechten gehört die Freigabe selbst abgesichert (eigener Benutzer,
+  nur Schreibrechte für den Ordner der Sicherungen).
 
 ## Produktivbetrieb
 
