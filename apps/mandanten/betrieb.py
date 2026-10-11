@@ -307,12 +307,13 @@ def alle_aktualisieren(pause_sekunden=10, git_pull=False):
     return ok, fehler
 
 
-def admin_passwort_zuruecksetzen(mandant):
+def admin_passwort_zuruecksetzen(mandant, passwort=None, _pruefen=True):
     """Setzt das Passwort des Instanz-Administrators in der laufenden Feuerix-Instanz neu (legt den Benutzer bei
-    Bedarf an) und speichert es verschluesselt. -> das neue Passwort (wird nur einmal angezeigt)."""
-    if mandant.status != "laeuft":
+    Bedarf an) und speichert es verschluesselt. Mit `passwort` wird ein vorgegebener Wert gesetzt (z. B. nach dem Zuruecksetzen
+    einer Demo, damit das im Portal gespeicherte Passwort wieder stimmt). -> das Passwort (wird nur einmal angezeigt)."""
+    if _pruefen and mandant.status != "laeuft":
         raise BereitstellungsFehler(f"Passwort-Reset nur fuer laufende Instanzen moeglich (Status: {mandant.status}).")
-    neu = basis.zufallswert(16)
+    neu = passwort or basis.zufallswert(16)
     skript = "\n".join([
         "from django.contrib.auth import get_user_model",
         "U = get_user_model()",
@@ -329,7 +330,8 @@ def admin_passwort_zuruecksetzen(mandant):
     basis.docker(befehl, "Admin-Passwort zuruecksetzen", timeout=120, eingabe=skript)
     mandant.admin_passwort = neu
     mandant.save(update_fields=["admin_passwort"])
-    mandant.protokollieren("Passwort des Instanz-Administrators zurückgesetzt.")
+    mandant.protokollieren("Passwort des Instanz-Administrators " + ("auf den im Portal gespeicherten Wert gesetzt."
+                                                                      if passwort else "zurückgesetzt."))
     return neu
 
 

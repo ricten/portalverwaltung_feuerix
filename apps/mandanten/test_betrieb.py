@@ -118,7 +118,7 @@ class AdminAktionTests(TestCase):
             admin.bereitstellen(request, MandantInstanz.objects.all())
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
-        self.assertEqual({"bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "sichern",
+        self.assertEqual({"bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "demo_zuruecksetzen", "demo_standard_speichern", "sichern",
                           "aktualisieren", "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"},
                          set(admin.actions))
 

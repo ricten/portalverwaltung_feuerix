@@ -74,6 +74,18 @@ def mandant_beispieldaten_task(mandant_id):
 
 
 @shared_task
+def demo_zuruecksetzen_task(mandant_id):
+    from . import demo
+    _ausfuehren(demo.zuruecksetzen, mandant_id, protokollieren=True)
+
+
+@shared_task
+def demo_standard_task(mandant_id):
+    from . import demo
+    _ausfuehren(demo.standard_speichern_aktion, mandant_id, protokollieren=True)
+
+
+@shared_task
 def mandant_backup_task(mandant_id):
     _ausfuehren(betrieb.vollsicherung, mandant_id, protokollieren=True)
 

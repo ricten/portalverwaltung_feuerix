@@ -79,6 +79,7 @@ class MandantInstanz(models.Model):
         "Anzahl Beispiel-Mitglieder", default=40, validators=[MinValueValidator(1), MaxValueValidator(500)])
     demo_inventar = models.BooleanField("Beispiel-Inventar anlegen", default=True)
     beispieldaten_angelegt = models.BooleanField("Beispieldaten angelegt", default=False, editable=False)
+    demo_standard_am = models.DateTimeField("Demo-Standard gespeichert am", null=True, blank=True, editable=False)
 
     secret_key = VerschluesseltesTextField("SECRET_KEY", blank=True, editable=False)
     field_encryption_key = VerschluesseltesTextField("FIELD_ENCRYPTION_KEY", blank=True, editable=False)

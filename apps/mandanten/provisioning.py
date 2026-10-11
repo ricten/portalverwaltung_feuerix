@@ -268,6 +268,12 @@ def beispieldaten_anlegen(mandant):
     mandant.save(update_fields=["beispieldaten_angelegt"])
     mandant.protokollieren(f"Beispieldaten angelegt ({mandant.demo_anzahl} Mitglieder"
                            f"{'' if mandant.demo_inventar else ', ohne Inventar'}).")
+    from . import demo      # erst hier: demo -> provisioning
+    try:
+        demo.standard_sichern(mandant)         # den frischen Stand als Demo-Standard merken
+    except BereitstellungsFehler as e:
+        mandant.protokollieren(f"Hinweis: Der Demo-Standard konnte nicht gespeichert werden ({e}). Mit der Aktion „Aktuellen Stand "
+                               "als Demo-Standard speichern“ nachholen.")
     return True
 
 

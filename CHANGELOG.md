@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.30.0 (2026-10-12)
+- Neu: **Demo zurücksetzen.** Direkt nach dem Anlegen der Beispieldaten speichert das Portal den **Demo-Standard** (Datenbank und Medien
+  in `instanzen/<kürzel>/demo-standard/`, bei aktivem Backup-Ziel zusätzlich auf der Freigabe). Die Aktion **„Demo auf Standard zurücksetzen“**
+  (auch als lila Knopf in der Zeile der Demo-Instanz, mit Rückfrage; `manage.py mandant_demo_zuruecksetzen <kürzel>`, z. B. für Cron) ersetzt
+  alle Daten der Instanz durch den Standard, wenn andere eigene Daten eingegeben haben: Datenbank und hochgeladene Medien werden geleert und
+  der Standard wird eingespielt; das Admin-Passwort wird danach wieder auf den im Portal gespeicherten Wert gesetzt. Mit **„Aktuellen Stand
+  als Demo-Standard speichern“** (bzw. `--standard-speichern`) legst du einen veränderten Zustand als neuen Standard fest.
+- Datenbank-Migration 0018.
+
 ## 0.29.0 (2026-10-12)
 - Neu: **Demo-Instanzen mit Beispieldaten.** Im Instanzformular gibt es den Haken „Demo-Instanz (mit Beispieldaten)“ mit Anzahl der
   Beispiel-Mitglieder (Standard 40) und der Option „Beispiel-Inventar anlegen“. Bei der Bereitstellung führt das Portal in der Instanz

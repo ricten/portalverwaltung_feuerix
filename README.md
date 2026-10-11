@@ -39,7 +39,10 @@ Verein gesperrten) Mandantenfähigkeit.
   Standard 40, und Beispiel-Inventar einstellbar). Bei der Bereitstellung führt das Portal Feuerix' Befehl `beispieldaten` in der Instanz
   aus: fiktive Mitglieder mit Beitragsrechnungen, Zahlungen und Mahnungen sowie ein Beispiel-Inventar. Das geschieht nur einmal je
   Instanz; Demo-Instanzen tragen in der Liste ein „DEMO“-Abzeichen (filterbar). Für eine schon laufende Instanz: Haken setzen, speichern, dann
-  Aktion „Beispieldaten anlegen (nur Demo-Instanzen)“ bzw. `manage.py mandant_beispieldaten <kürzel>`. **Nur für Vorführ- und Testinstanzen,
+  Aktion „Beispieldaten anlegen (nur Demo-Instanzen)“ bzw. `manage.py mandant_beispieldaten <kürzel>`. Direkt danach speichert das Portal den
+  **Demo-Standard** (Datenbank und Medien). **Demo auf Standard zurücksetzen** (Aktion oder lila Knopf in der Zeile, auch `manage.py
+  mandant_demo_zuruecksetzen <kürzel>` für Cron) ersetzt alle Daten der Instanz durch diesen Standard, z. B. nachdem Besucher eigene Daten
+  eingegeben haben; **Aktuellen Stand als Demo-Standard speichern** legt einen veränderten Zustand als neuen Standard fest. **Nur für Vorführ- und Testinstanzen,
   nie für echte Vereine.**
 - **Port-Vergabe**: nächster freier Port ab `WEB_PORT_BASIS` usw. Frei heißt: von keiner Instanz in irgendeinem Port-Feld
   belegt **und** auf dem Server tatsächlich nicht gebunden (Bind-Versuch). OpenSlides bekommt je Instanz einen eigenen
@@ -137,6 +140,7 @@ Alles Wichtige geht im Admin; für Skripte, Cron und Notfälle gibt es `./venv/b
 | `mandant_status` | Status und Erreichbarkeit aller Instanzen (Fehlercode bei Ausfall, gut für Monitoring) |
 | `mandant_online_check [--streng]` | Online-Check: Instanzen und Backup-Ziel prüfen und den Zustand speichern |
 | `mandant_beispieldaten <kürzel> [--anzahl N] [--ohne-inventar]` | Beispieldaten in einer laufenden Demo-Instanz anlegen (nur einmal) |
+| `mandant_demo_zuruecksetzen <kürzel> [--standard-speichern]` | Demo-Instanz auf den Demo-Standard zurücksetzen bzw. den jetzigen Stand als Standard speichern |
 | `mandant_dienst <kürzel> stop\|start\|restart` | Instanz samt Paperless/OpenSlides anhalten, starten, neu starten |
 | `env_entschluesseln <datei> [--ausgabe .env]` | die mit der Sicherung abgelegte, verschlüsselte `.env` wieder lesbar machen |
 | `mandant_backup [kürzel]` | vollständige Sicherung (Feuerix, Paperless-Export, OpenSlides-Dump) |

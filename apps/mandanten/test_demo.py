@@ -1,5 +1,9 @@
 """Tests: Demo-Instanzen mit Beispieldaten (Docker gemockt)."""
 import io
+import tempfile
+from contextlib import contextmanager
+from datetime import timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.contrib.admin.sites import site
@@ -7,9 +11,10 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 
-from . import provisioning, tasks
+from . import demo, provisioning, tasks
 from .basis import BereitstellungsFehler, status_vor_vormerkung
 from .models import LogEintrag, MandantInstanz
 
@@ -32,9 +37,13 @@ class _Docker:
         return ""
 
 
+@contextmanager
 def _patch(docker):
-    return patch.multiple("apps.mandanten.provisioning", docker=docker,
-                          _compose_basis=MagicMock(return_value=["docker", "compose"]))
+    """Docker und den Demo-Standard ersetzen - ein Test darf nie ein echtes docker aufrufen."""
+    with patch.multiple("apps.mandanten.provisioning", docker=docker,
+                        _compose_basis=MagicMock(return_value=["docker", "compose"])), \
+         patch("apps.mandanten.demo.standard_sichern") as standard:
+        yield standard
 
 
 class BeispieldatenTests(TestCase):
@@ -208,3 +217,259 @@ class ModellUndAdminTests(TestCase):
         for kw in (dict(demo=False), dict(beispieldaten_angelegt=True), dict(status="gestoppt")):
             fremd = _m(f"y{len(kw)}{list(kw)[0][:3]}", **kw)
             self._aktion(fremd).assert_not_called()
+
+
+# --------------------------------------------------------------------------------------- Demo-Standard und Zuruecksetzen
+BACKUP_AUSGABE = "Sicherung abgeschlossen: /data/backups (*-20261012-101500)\nWICHTIG: FIELD_ENCRYPTION_KEY separat sichern!\n"
+
+
+class _DemoDocker:
+    def __init__(self, fehler_bei=None, ausgabe=BACKUP_AUSGABE):
+        self.befehle, self.fehler_bei, self.ausgabe = [], fehler_bei, ausgabe
+
+    def __call__(self, befehl, was, **kw):
+        self.befehle.append((befehl, was, kw))
+        if self.fehler_bei and self.fehler_bei in was:
+            raise BereitstellungsFehler(f"{was} fehlgeschlagen:\nkaputt")
+        if any("backup.sh" in teil for teil in befehl):
+            return self.ausgabe
+        return ""
+
+    def namen(self):
+        return [was for _, was, _ in self.befehle]
+
+
+def _ordner(tmp, m, mit_medien=True):
+    ordner = Path(tmp) / m.kuerzel / "demo-standard"
+    ordner.mkdir(parents=True)
+    (ordner / "db.sql.gz").write_text("db")
+    if mit_medien:
+        (ordner / "media.tar.gz").write_text("media")
+    return ordner
+
+
+class StandardSichernTests(TestCase):
+    def _lauf(self, m, docker, tmp):
+        with override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.demo.basis.docker", side_effect=docker), \
+             patch("apps.mandanten.demo.provisioning._compose_basis", return_value=["docker", "compose"]):
+            demo.standard_sichern(m)
+
+    def test_sichert_mit_dem_zeitstempel_aus_der_ausgabe_und_merkt_sich_den_zeitpunkt(self):
+        m = _m("ds1")
+        docker = _DemoDocker()
+        with tempfile.TemporaryDirectory() as tmp:
+            self._lauf(m, docker, tmp)
+            kopien = [b for b, was, _ in docker.befehle if "cp" in b]
+            self.assertEqual([k[-2] for k in kopien], ["web:/data/backups/db-20261012-101500.sql.gz",
+                                                       "web:/data/backups/media-20261012-101500.tar.gz"])
+            self.assertTrue(kopien[0][-1].endswith("db.sql.gz"))
+            self.assertTrue(kopien[1][-1].endswith("media.tar.gz"))
+        m.refresh_from_db()
+        self.assertIsNotNone(m.demo_standard_am)
+        self.assertIn("Demo-Standard gespeichert", m.protokoll)
+
+    def test_ohne_erkennbaren_zeitstempel_oder_bei_dockerfehler_wird_nichts_markiert(self):
+        for docker in (_DemoDocker(ausgabe="irgendwas"), _DemoDocker(fehler_bei="Medien kopieren")):
+            m = _m(f"ds{id(docker) % 1000}")
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaises(BereitstellungsFehler):
+                    self._lauf(m, docker, tmp)
+            m.refresh_from_db()
+            self.assertIsNone(m.demo_standard_am)
+
+    def test_wird_bei_aktivem_backup_ziel_auch_auf_die_freigabe_gelegt_ein_fehler_dort_stoert_nicht(self):
+        m = _m("ds2")
+        with tempfile.TemporaryDirectory() as tmp, patch("apps.mandanten.demo.backupziel.aktuell", return_value=True), \
+             patch("apps.mandanten.demo.backupziel.hochladen") as hoch:
+            self._lauf(m, _DemoDocker(), tmp)
+            hoch.assert_called_once()
+            self.assertEqual(hoch.call_args.args[2], "demo-standard")
+        with tempfile.TemporaryDirectory() as tmp, patch("apps.mandanten.demo.backupziel.aktuell", return_value=True), \
+             patch("apps.mandanten.demo.backupziel.hochladen", side_effect=BereitstellungsFehler("Netz weg")):
+            self._lauf(m, _DemoDocker(), tmp)
+        m.refresh_from_db()
+        self.assertIn("nicht auf die Freigabe hochgeladen", m.protokoll)
+
+    def test_nach_den_beispieldaten_wird_der_standard_gespeichert_ein_fehler_dort_ist_nur_ein_hinweis(self):
+        m = _m("ds3")
+        docker = _Docker()
+        with _patch(docker) as standard:
+            provisioning.beispieldaten_anlegen(m)
+        standard.assert_called_once_with(m)
+        m2 = _m("ds4")
+        with _patch(_Docker()) as standard:
+            standard.side_effect = BereitstellungsFehler("Platte voll")
+            self.assertTrue(provisioning.beispieldaten_anlegen(m2))
+        m2.refresh_from_db()
+        self.assertTrue(m2.beispieldaten_angelegt)
+        self.assertIn("Demo-Standard konnte nicht gespeichert werden", m2.protokoll)
+
+    def test_aktion_speichert_nur_fuer_laufende_demo_instanzen_und_stellt_den_status_wieder_her(self):
+        m = _m("ds5")
+        with patch("apps.mandanten.demo.standard_sichern") as sichern:
+            demo.standard_speichern_aktion(m)
+        sichern.assert_called_once()
+        m.refresh_from_db()
+        self.assertEqual((m.status, m.fortschritt), ("laeuft", 100))
+        with patch("apps.mandanten.demo.standard_sichern", side_effect=BereitstellungsFehler("kaputt")):
+            with self.assertRaises(BereitstellungsFehler):
+                demo.standard_speichern_aktion(m)
+        m.refresh_from_db()
+        self.assertEqual(m.status, "laeuft")
+        for kw in (dict(demo=False), dict(status="gestoppt")):
+            with self.assertRaises(BereitstellungsFehler):
+                demo.standard_speichern_aktion(_m(f"dz{len(kw)}{list(kw)[0][:2]}", **kw))
+
+
+class ZuruecksetzenTests(TestCase):
+    def _lauf(self, m, docker=None, mit_medien=True, tmp_ordner=None):
+        docker = docker or _DemoDocker()
+        mit = tempfile.TemporaryDirectory()
+        self.addCleanup(mit.cleanup)
+        with override_settings(INSTANZEN_VERZEICHNIS=mit.name):
+            _ordner(mit.name, m, mit_medien)
+            with patch("apps.mandanten.demo.basis.docker", side_effect=docker), \
+                 patch("apps.mandanten.demo.provisioning._compose_basis", return_value=["docker", "compose"]), \
+                 patch("apps.mandanten.demo.provisioning.stack_steuern") as steuern, \
+                 patch("apps.mandanten.demo.provisioning.auf_bereitschaft_warten"), \
+                 patch("apps.mandanten.demo.provisioning.proxy_nachziehen_best_effort"), \
+                 patch("apps.mandanten.demo.betrieb.admin_passwort_zuruecksetzen") as passwort:
+                self.steuern, self.passwort, self.docker = steuern, passwort, docker
+                demo.zuruecksetzen(m)
+        return docker
+
+    def _demo(self, kuerzel="zr1", **kw):
+        return _m(kuerzel, demo_standard_am=timezone.now() - timedelta(days=1), admin_passwort="StandardPw", **kw)
+
+    def test_ablauf_leert_datenbank_und_medien_und_spielt_den_standard_ein(self):
+        m = self._demo()
+        docker = self._lauf(m)
+        self.assertEqual(docker.namen(), [
+            "Demo-Standard in den Container kopieren", "Demo-Standard (Medien) in den Container kopieren", "Worker anhalten",
+            "Datenbank leeren", "Medien leeren", "Demo-Standard einspielen"])
+        self.assertIn("DROP SCHEMA public CASCADE", docker.befehle[3][0][-1])
+        self.assertIn("find /data/media -mindepth 1 -delete", docker.befehle[4][0][-1])
+        self.assertEqual(docker.befehle[-1][0][-3:], ["/app/scripts/restore.sh", "demo-standard-db.sql.gz",
+                                                      "demo-standard-media.tar.gz"])
+        self.assertEqual([c.args[1] for c in self.steuern.call_args_list], ["start", "start", "restart"])
+        self.passwort.assert_called_once()
+        self.assertEqual(self.passwort.call_args.kwargs, {"passwort": "StandardPw", "_pruefen": False})
+        m.refresh_from_db()
+        self.assertEqual((m.status, m.fortschritt), ("laeuft", 100))
+        self.assertIn("Demo auf den Standard zurückgesetzt", m.protokoll)
+
+    def test_ohne_medien_im_standard_werden_die_medien_nicht_angefasst(self):
+        docker = self._lauf(self._demo("zr2"), mit_medien=False)
+        self.assertNotIn("Medien leeren", docker.namen())
+        self.assertEqual(docker.befehle[-1][0][-2:], ["/app/scripts/restore.sh", "demo-standard-db.sql.gz"])
+
+    def test_fehler_vor_dem_leeren_aendert_nichts(self):
+        m = self._demo("zr3", status="gestoppt")
+        with self.assertRaises(BereitstellungsFehler):
+            self._lauf(m, docker=_DemoDocker(fehler_bei="Worker anhalten"))
+        self.assertNotIn("Datenbank leeren", self.docker.namen())
+        m.refresh_from_db()
+        self.assertEqual(m.status, "gestoppt")
+
+    def test_fehler_nach_dem_leeren_markiert_fehlgeschlagen_und_der_standard_bleibt(self):
+        m = self._demo("zr4")
+        with self.assertRaises(BereitstellungsFehler):
+            self._lauf(m, docker=_DemoDocker(fehler_bei="Demo-Standard einspielen"))
+        m.refresh_from_db()
+        self.assertEqual(m.status, "fehlgeschlagen")
+        self.assertIn("nachdem die Daten entfernt wurden", m.protokoll)
+        self.assertIsNotNone(m.demo_standard_am)
+
+    def test_voraussetzungen(self):
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp):
+            with self.assertRaises(BereitstellungsFehler):
+                demo.zuruecksetzen(_m("zr5"))                                              # kein Standard gespeichert
+            with self.assertRaises(BereitstellungsFehler):
+                demo.zuruecksetzen(self._demo("zr6", demo=False))                          # keine Demo
+            with self.assertRaises(BereitstellungsFehler):
+                demo.zuruecksetzen(self._demo("zr7", status="pausiert"))                   # falscher Status
+            m = self._demo("zr8")                                                          # Zeitpunkt da, Datei fehlt
+            with self.assertRaises(BereitstellungsFehler):
+                demo.zuruecksetzen(m)
+
+    def test_admin_passwort_erhaelt_den_gespeicherten_wert(self):
+        from . import betrieb
+        m = _m("zr9", admin_passwort="Fest12345")
+        with patch("apps.mandanten.betrieb.provisioning._compose_basis", return_value=["docker"]), \
+             patch("apps.mandanten.betrieb.basis.docker") as d:
+            neu = betrieb.admin_passwort_zuruecksetzen(m, passwort="Fest12345", _pruefen=False)
+        self.assertEqual(neu, "Fest12345")
+        self.assertIn("Fest12345", d.call_args.kwargs["eingabe"])
+        m.refresh_from_db()
+        self.assertIn("auf den im Portal gespeicherten Wert gesetzt", m.protokoll)
+
+
+class DemoAdminTests(TestCase):
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.create_superuser("dza", "d@example.org", "pw"))
+
+    def _demo(self, kuerzel, **kw):
+        return _m(kuerzel, demo_standard_am=timezone.now(), **kw)
+
+    def _aktion(self, name, m):
+        admin = site._registry[MandantInstanz]
+        request = RequestFactory().post("/")
+        request.user = get_user_model().objects.get(username="dza")
+        request._messages = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.tasks.demo_zuruecksetzen_task.delay") as zr, \
+             patch("apps.mandanten.tasks.demo_standard_task.delay") as st:
+            if m.demo_standard_am:
+                _ordner(tmp, m)
+            getattr(admin, name)(request, MandantInstanz.objects.filter(pk=m.pk))
+        return zr, st
+
+    def test_zuruecksetzen_nur_mit_standard_demo_und_geeignetem_status(self):
+        m = self._demo("da1")
+        zr, _ = self._aktion("demo_zuruecksetzen", m)
+        zr.assert_called_once_with(m.pk)
+        m.refresh_from_db()
+        self.assertEqual(status_vor_vormerkung(m), "laeuft")
+        self.assertTrue(LogEintrag.objects.filter(text__contains="Demo-Zurücksetzen gestartet", benutzer="dza").exists())
+        for kw in (dict(demo=False), dict(status="pausiert")):
+            fremd = self._demo(f"db{len(kw)}{list(kw)[0][:2]}", **kw)
+            self._aktion("demo_zuruecksetzen", fremd)[0].assert_not_called()
+        ohne_standard = _m("da2")
+        self._aktion("demo_zuruecksetzen", ohne_standard)[0].assert_not_called()
+
+    def test_standard_speichern_nur_fuer_laufende_demo_instanzen(self):
+        m = _m("da3")
+        _, st = self._aktion("demo_standard_speichern", m)
+        st.assert_called_once_with(m.pk)
+        gestoppt = _m("da4", status="gestoppt")
+        self._aktion("demo_standard_speichern", gestoppt)[1].assert_not_called()
+
+    def test_zeilenknopf_nur_bei_laufender_demo_mit_standard_und_klick_startet_das_zuruecksetzen(self):
+        m = self._demo("da5")
+        _m("da6", demo_standard_am=None)                      # Demo ohne Standard
+        _m("da7", demo=False)
+        html = self.client.get("/admin/mandanten/mandantinstanz/").content.decode()
+        self.assertEqual(html.count("pv-knopf pv-demo"), 1)
+        self.assertIn(f"/{m.pk}/dienst/demo_zuruecksetzen/", html)
+        with tempfile.TemporaryDirectory() as tmp, override_settings(INSTANZEN_VERZEICHNIS=tmp), \
+             patch("apps.mandanten.tasks.demo_zuruecksetzen_task.delay") as delay:
+            _ordner(tmp, m)
+            self.assertEqual(self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/demo_zuruecksetzen/").status_code, 302)
+        delay.assert_called_once_with(m.pk)
+        self.client.force_login(get_user_model().objects.create_user("ro4", is_staff=True))
+        self.assertEqual(self.client.post(f"/admin/mandanten/mandantinstanz/{m.pk}/dienst/demo_zuruecksetzen/").status_code, 403)
+
+    def test_befehl(self):
+        _m("da8")
+        with patch("apps.mandanten.demo.zuruecksetzen") as zr, patch("apps.mandanten.demo.standard_speichern_aktion") as st:
+            out = io.StringIO()
+            call_command("mandant_demo_zuruecksetzen", "da8", stdout=out)
+            call_command("mandant_demo_zuruecksetzen", "da8", "--standard-speichern", stdout=out)
+        zr.assert_called_once()
+        st.assert_called_once()
+        with self.assertRaises(CommandError):
+            call_command("mandant_demo_zuruecksetzen", "gibt-es-nicht", stdout=io.StringIO())
+        with patch("apps.mandanten.demo.zuruecksetzen", side_effect=BereitstellungsFehler("kein Standard")):
+            with self.assertRaises(CommandError):
+                call_command("mandant_demo_zuruecksetzen", "da8", stdout=io.StringIO())

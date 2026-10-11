@@ -50,7 +50,7 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                        "protokoll", "feuerix_version", "paperless_version", "openslides_version",
                        "erstellt_am", "aktualisiert_am")
     form = MandantForm
-    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "sichern", "aktualisieren",
+    actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "demo_zuruecksetzen", "demo_standard_speichern", "sichern", "aktualisieren",
                "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
@@ -266,6 +266,18 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         """Ziel der Schaltflaechen in der Instanzliste (nur POST, braucht Aenderungsrecht)."""
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
+        if aktion == "demo_zuruecksetzen" and self.has_change_permission(request):
+            m = MandantInstanz.objects.filter(pk=pk).first()
+            grund = self._demo_grund(m, brauche_standard=True) if m else "nicht gefunden."
+            if grund:
+                self.message_user(request, f"Demo zurücksetzen nicht möglich: {grund}", messages.WARNING)
+            else:
+                vormerken(m, "Demo zurücksetzen: in der Warteschlange")
+                self._log(request, m, "Demo-Zurücksetzen gestartet")
+                tasks.demo_zuruecksetzen_task.delay(m.pk)
+                self.message_user(request, f"Demo {m.kuerzel} wird zurückgesetzt - Fortschritt siehe Spalte „Fortschritt“.",
+                                  messages.INFO)
+            return HttpResponseRedirect(reverse("admin:mandanten_mandantinstanz_changelist"))
         dienst_update = {"paperless_update": "paperless", "openslides_update": "openslides"}
         if not self.has_change_permission(request) or (
                 aktion not in self.DIENSTE and aktion != "aktualisieren" and aktion not in dienst_update):
@@ -365,6 +377,13 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                 '<path fill="currentColor" d="{}"/></svg></button>',
                 klasse, reverse("admin:mandanten_dienst", args=[obj.pk, aktion]), frage, text, text,
                 "" if obj.status in erlaubt else mark_safe(" disabled"), symbol))
+        if obj.demo and obj.demo_standard_am and obj.status == "laeuft":
+            knoepfe.append(format_html(
+                '<button type="button" class="pv-knopf pv-demo" data-url="{}" data-frage="{}" title="Demo auf Standard '
+                'zurücksetzen" aria-label="Demo zurücksetzen"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">'
+                '<path fill="currentColor" d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9.1.1L9 12H6a7 7 0 1 1 2.05 4.95L6.64 18.36A9 9 0 1 0 13 3zm-1 5v5l4.3 2.5.8-1.3-3.6-2.1V8z"/></svg></button>',
+                reverse("admin:mandanten_dienst", args=[obj.pk, "demo_zuruecksetzen"]),
+                "Demo „" + obj.kuerzel + "“ auf den Standard zurücksetzen? Alle Daten, die jemand eingegeben hat, gehen verloren."))
         return format_html('<div class="pv-knoepfe">{}</div>', mark_safe("".join(knoepfe)))
 
     def status_json(self, request, pk):
@@ -485,6 +504,49 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         if gestartet:
             self.message_user(request, f"Stilllegen gestartet für: {', '.join(gestartet)} - Fortschritt siehe Spalte "
                                        "„Fortschritt“.", messages.INFO)
+
+    @admin.action(description="Demo auf Standard zurücksetzen (ersetzt alle Daten der Instanz)")
+    def demo_zuruecksetzen(self, request, queryset):
+        gestartet = []
+        for m in queryset:
+            grund = self._demo_grund(m, brauche_standard=True)
+            if grund:
+                self.message_user(request, f"{m.kuerzel}: {grund}", messages.WARNING)
+                continue
+            vormerken(m, "Demo zurücksetzen: in der Warteschlange")
+            self._log(request, m, "Demo-Zurücksetzen gestartet")
+            tasks.demo_zuruecksetzen_task.delay(m.pk)
+            gestartet.append(m.kuerzel)
+        if gestartet:
+            self.message_user(request, f"Demo wird zurückgesetzt: {', '.join(gestartet)} - Fortschritt siehe Spalte „Fortschritt“.",
+                              messages.INFO)
+
+    @admin.action(description="Aktuellen Stand als Demo-Standard speichern")
+    def demo_standard_speichern(self, request, queryset):
+        gestartet = []
+        for m in queryset:
+            grund = self._demo_grund(m, brauche_standard=False, nur_laufend=True)
+            if grund:
+                self.message_user(request, f"{m.kuerzel}: {grund}", messages.WARNING)
+                continue
+            vormerken(m, "Demo-Standard: in der Warteschlange")
+            self._log(request, m, "Demo-Standard speichern gestartet")
+            tasks.demo_standard_task.delay(m.pk)
+            gestartet.append(m.kuerzel)
+        if gestartet:
+            self.message_user(request, f"Demo-Standard wird gespeichert: {', '.join(gestartet)}.", messages.INFO)
+
+    def _demo_grund(self, m, brauche_standard, nur_laufend=False):
+        """Warum eine Demo-Aktion fuer diese Instanz nicht moeglich ist (None = moeglich)."""
+        from . import demo
+        if not m.demo:
+            return "keine Demo-Instanz."
+        erlaubt = ("laeuft",) if nur_laufend else ("laeuft", "gestoppt", "fehlgeschlagen")
+        if m.status not in erlaubt:
+            return f"im Status „{m.get_status_display()}“ nicht möglich."
+        if brauche_standard and not demo.standard_vorhanden(m):
+            return "noch kein Demo-Standard gespeichert (Aktion „Aktuellen Stand als Demo-Standard speichern“)."
+        return None
 
     @admin.action(description="Beispieldaten anlegen (nur Demo-Instanzen)")
     def beispieldaten(self, request, queryset):

@@ -62,7 +62,9 @@ Benutzername und Passwort des Portal-Administrators. Mehrfaches Ausführen ist m
    **Demo- oder Testinstanz?** Haken **„Demo-Instanz (mit Beispieldaten)“** setzen: Das Portal füllt die Instanz bei der Bereitstellung mit
    fiktiven Mitgliedern, Rechnungen, Zahlungen (auch Mahnungen) und einem Beispiel-Inventar (Anzahl einstellbar, Standard 40). Nie bei echten
    Vereinen verwenden. Eine schon laufende Instanz kannst du nachträglich zur Demo machen: Haken setzen, speichern, Aktion
-   **Beispieldaten anlegen (nur Demo-Instanzen)**.
+   **Beispieldaten anlegen (nur Demo-Instanzen)**. Danach merkt sich das Portal den Stand als **Demo-Standard**; mit **Demo auf Standard
+   zurücksetzen** (oder dem lila Knopf in der Zeile) stellst du ihn wieder her, wenn andere Daten eingegeben haben. Das ersetzt alle Daten der
+   Instanz.
 3. Instanz in der Liste markieren → Aktion **Bereitstellen**. Der Fortschrittsbalken zeigt die Schritte; der erste Lauf
    baut das Feuerix-Image und dauert einige Minuten.
 4. Aktion **Zugangsdaten des Instanz-Administrators anzeigen** zeigt Adresse, Benutzer und Startpasswort der neuen
