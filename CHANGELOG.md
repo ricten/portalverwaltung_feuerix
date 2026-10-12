@@ -4,6 +4,10 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.33.1 (2026-10-12)
+- Versionsspalte: Der Knopf „Feuerix aktualisieren“ mit „→ neue Version“ steht jetzt direkt hinter der Feuerix-Version statt unter den
+  Paperless-/OpenSlides-Zeilen, wo er wie deren Update wirkte.
+
 ## 0.33.0 (2026-10-12)
 - **Zwei-Faktor-Anmeldung (2FA)** für die Weboberfläche: Authenticator-App (TOTP, z. B. Google/Microsoft Authenticator, Aegis, FreeOTP) plus
   10 Einmal-Notfallcodes. **Superuser müssen sie nutzen** (beim nächsten Login: QR-Code scannen, Code bestätigen, Notfallcodes sichern); andere

@@ -358,9 +358,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         text = obj.feuerix_version or "-"
         zustand = UpdateZustand.holen()
         ziel = zustand.ziel_version
-        text = self._mit_diensten(obj, zustand, text)
         if obj.status not in ("laeuft", "gestoppt") or not ziel or obj.feuerix_version == ziel:
-            return text
+            return self._mit_diensten(obj, zustand, text)
         frage = f"{obj.kuerzel} auf Feuerix {ziel} aktualisieren? Die Instanz ist dabei kurz nicht erreichbar."
         if obj.status == "gestoppt":
             frage = (f"{obj.kuerzel} ist gestoppt. Auf Feuerix {ziel} aktualisieren? Es wird nur das Image gebaut, "
@@ -369,12 +368,14 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             frage += (" Alle Sicherungen (Feuerix und Zusatzdienste) sind aktuell." if obj.alle_sicherungen_aktuell
                       else " Fehlende oder veraltete Sicherungen (Feuerix, Paperless, OpenSlides) werden vorher "
                            "automatisch angelegt.")
-        return format_html(
+        # Der Knopf gehoert in die Feuerix-Zeile (vor Paperless/OpenSlides), sonst wirkt er wie deren Update
+        kopf = format_html(
             '<span>{}</span> <button type="button" class="pv-knopf pv-update-einzeln" data-url="{}" '
-            'data-frage="{}" title="Auf {} aktualisieren" aria-label="Aktualisieren">'
+            'data-frage="{}" title="Feuerix auf {} aktualisieren" aria-label="Feuerix aktualisieren">'
             '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" '
             'd="M12 3l-8 8h5v9h6v-9h5z"/></svg></button> <small>→ {}</small>',
             text, reverse("admin:mandanten_dienst", args=[obj.pk, "aktualisieren"]), frage, ziel, ziel)
+        return self._mit_diensten(obj, zustand, kopf)
 
     @admin.display(description="Steuerung")
     def steuerung(self, obj):
