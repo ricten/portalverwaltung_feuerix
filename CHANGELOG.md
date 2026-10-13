@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an der Portalverwaltung, neueste zuerst. Versions
 Versioning (siehe [VERSION.md](VERSION.md)). Die Einträge bis 0.6.0 wurden nachträglich aus der Git-Historie
 zusammengestellt.
 
+## 0.34.0 (2026-10-13)
+- **Passwörter von Paperless und OpenSlides zurücksetzen**: Neue Aktionen „Paperless-Passwort der Instanz zurücksetzen“ und „OpenSlides-Passwort
+  (superadmin) der Instanz zurücksetzen“ (nur Superuser, nur laufende Instanzen). Paperless per Skript über stdin, OpenSlides mit
+  `osmanage set-password` (Datei `secrets/superadmin` und die OpenSlides-Anbindung in Feuerix werden nachgezogen). Das neue Passwort wird einmal angezeigt.
+- **Zugangsdaten anzeigen** zeigt jetzt auch die Startpasswörter von Paperless und OpenSlides.
+- Migration: keine.
+
 ## 0.33.1 (2026-10-12)
 - Versionsspalte: Der Knopf „Feuerix aktualisieren“ mit „→ neue Version“ steht jetzt direkt hinter der Feuerix-Version statt unter den
   Paperless-/OpenSlides-Zeilen, wo er wie deren Update wirkte.

@@ -9,7 +9,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from . import backupziel, benachrichtigung, betrieb, gesamtlog, loginsperre, provisioning, tasks, updates
+from . import backupziel, benachrichtigung, betrieb, dienstpasswort, gesamtlog, loginsperre, provisioning, tasks, updates
 from .basis import vormerken, WARTESCHLANGE_DIENST, WARTESCHLANGE_UPDATE, WARTESCHLANGE_UPDATE_GESTOPPT, BereitstellungsFehler
 from .models import BackupZiel, Benachrichtigung, LogEintrag, MandantInstanz, UpdateZustand
 
@@ -59,7 +59,8 @@ class MandantInstanzAdmin(admin.ModelAdmin):
         return request.user.is_superuser
 
     actions = ["bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "demo_zuruecksetzen", "demo_standard_speichern", "sichern", "aktualisieren",
-               "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"]
+               "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen", "paperless_passwort_zuruecksetzen",
+               "openslides_passwort_zuruecksetzen"]
 
     # Schaltflaechen in der Zeile: aktion -> (erlaubte Status, Task, Text, SVG-Pfad, Farbklasse, Rueckfrage)
     DIENSTE = {
@@ -641,10 +642,16 @@ class MandantInstanzAdmin(admin.ModelAdmin):
                                   messages.WARNING)
                 continue
             m.protokollieren(f"Zugangsdaten angezeigt für {request.user.get_username()}.")
+            zeilen = [f"Feuerix: https://{m.domain}/ - Benutzer „{m.admin_benutzername}“, Passwort: {m.admin_passwort}"]
+            if m.paperless_domain and m.paperless_admin_passwort:
+                zeilen.append(f"Paperless: https://{m.paperless_domain}/ - Benutzer „{m.admin_benutzername}“, "
+                              f"Passwort: {m.paperless_admin_passwort}")
+            if m.openslides_domain and m.openslides_superadmin_passwort:
+                zeilen.append(f"OpenSlides: https://{m.openslides_domain}/ - Benutzer „superadmin“, "
+                              f"Passwort: {m.openslides_superadmin_passwort}")
             self.message_user(
-                request, f"{m.kuerzel}: https://{m.domain}/ - Benutzer „{m.admin_benutzername}“, Passwort: "
-                         f"{m.admin_passwort} (Stand der Bereitstellung; nach einer Änderung in Feuerix selbst "
-                         "bitte „zurücksetzen“ nutzen).", messages.WARNING)
+                request, f"{m.kuerzel} - " + " | ".join(zeilen) + " (Stand der Bereitstellung bzw. des letzten Resets im "
+                         "Portal; nach einer Änderung im Dienst selbst bitte „zurücksetzen“ nutzen).", messages.WARNING)
 
     @admin.action(permissions=["superuser"], description="Admin-Passwort der Instanz zurücksetzen")
     def admin_passwort_zuruecksetzen(self, request, queryset):
@@ -657,6 +664,28 @@ class MandantInstanzAdmin(admin.ModelAdmin):
             self.message_user(
                 request, f"{m.kuerzel}: neues Passwort für Benutzer „{m.admin_benutzername}“: {neu} - "
                          "wird nur jetzt angezeigt, bitte sicher weitergeben.", messages.WARNING)
+
+    def _dienst_zuruecksetzen(self, request, queryset, dienst, benutzer):
+        for m in queryset:
+            try:
+                funktion = (dienstpasswort.paperless_zuruecksetzen if dienst == "paperless"
+                            else dienstpasswort.openslides_zuruecksetzen)
+                neu = funktion(m)
+            except BereitstellungsFehler as e:
+                self.message_user(request, f"{m.kuerzel}: {e}", messages.ERROR)
+                continue
+            self.message_user(
+                request, f"{m.kuerzel}: neues {dienstpasswort.NAMEN[dienst]}-Passwort für Benutzer „{benutzer(m)}“: {neu} - "
+                         "wird nur jetzt angezeigt (später über „Zugangsdaten anzeigen“), bitte sicher weitergeben.",
+                messages.WARNING)
+
+    @admin.action(permissions=["superuser"], description="Paperless-Passwort der Instanz zurücksetzen")
+    def paperless_passwort_zuruecksetzen(self, request, queryset):
+        self._dienst_zuruecksetzen(request, queryset, "paperless", lambda m: m.admin_benutzername)
+
+    @admin.action(permissions=["superuser"], description="OpenSlides-Passwort (superadmin) der Instanz zurücksetzen")
+    def openslides_passwort_zuruecksetzen(self, request, queryset):
+        self._dienst_zuruecksetzen(request, queryset, "openslides", lambda m: "superadmin")
 
 
 class SperrAnmeldeForm(AdminAuthenticationForm):

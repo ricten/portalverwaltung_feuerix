@@ -119,7 +119,8 @@ class AdminAktionTests(TestCase):
         backup.assert_called_once_with(m.pk)
         bereit.assert_called_once_with(m.pk)
         self.assertEqual({"bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "wiederherstellen", "endgueltig_loeschen", "haengende_zuruecksetzen", "beispieldaten", "demo_zuruecksetzen", "demo_standard_speichern", "sichern",
-                          "aktualisieren", "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen"},
+                          "aktualisieren", "zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen",
+                      "paperless_passwort_zuruecksetzen", "openslides_passwort_zuruecksetzen"},
                          set(admin.actions))
 
 

@@ -15,7 +15,7 @@ from . import basis, rechte
 from .models import BackupZiel, Benachrichtigung, MandantInstanz
 
 AKTIONEN_SUPERUSER = {"zugangsdaten_anzeigen", "admin_passwort_zuruecksetzen", "wiederherstellen", "endgueltig_loeschen",
-                      "haengende_zuruecksetzen"}
+                      "haengende_zuruecksetzen", "paperless_passwort_zuruecksetzen", "openslides_passwort_zuruecksetzen"}
 ALLE_AKTIONEN = {"bereitstellen", "starten", "stoppen", "neustarten", "stilllegen", "demo_zuruecksetzen",
                  "demo_standard_speichern", "beispieldaten", "sichern", "aktualisieren"} | AKTIONEN_SUPERUSER
 

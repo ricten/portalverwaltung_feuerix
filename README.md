@@ -58,7 +58,9 @@ Verein gesperrten) Mandantenfähigkeit.
 - **Starten / Stoppen / Neustarten** (Container werden nur angehalten bzw. neu gestartet, nichts wird neu gebaut).
 - **Instanz stilllegen**: Container und Netzwerk werden entfernt, Datenbank und Medien bleiben in den Volumes
   (Status „Stillgelegt“); **Starten** geht aus „Gestoppt“ und „Stillgelegt“.
-- **Zugangsdaten anzeigen** (Superuser; zeigt das Startpasswort) und **Admin-Passwort der Instanz zurücksetzen**.
+- **Zugangsdaten anzeigen** (Superuser; zeigt die Startpasswörter von Feuerix, Paperless und OpenSlides) und Zurücksetzen der Passwörter:
+  **Admin-Passwort der Instanz**, **Paperless-Passwort** und **OpenSlides-Passwort (superadmin)** zurücksetzen (nur bei laufender Instanz; das neue Passwort
+  wird einmal angezeigt und danach unter „Zugangsdaten anzeigen“ geführt, bei OpenSlides wird auch die Anbindung in Feuerix nachgezogen).
 - **Instanz endgültig löschen** mit Abschlusssicherung (siehe unten).
 - **Hängende Instanz zurücksetzen**: Bleibt eine Instanz auf „In Arbeit“ stehen (z. B. Worker währenddessen neu gestartet), ermittelt das Portal den
   echten Zustand über Docker und setzt den Status – nur, wenn der Vorgang nicht mehr aktiv aussieht (15 Minuten ohne Fortschritt, kein
