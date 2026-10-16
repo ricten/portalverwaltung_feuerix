@@ -50,5 +50,6 @@ Aufbau oder Regeln ändern. Die Version in der Fußzeile des Portals kommt aus `
 
 ## Versionierung
 Bei jeder Änderung mit Nutzerwirkung: Nummer in [VERSION.md](VERSION.md) erhöhen (Semantic Versioning) und einen
-Eintrag oben in [CHANGELOG.md](CHANGELOG.md) schreiben. Nach dem Commit den Stand mit einem annotierten Git-Tag
+Eintrag oben in [CHANGELOG.md](CHANGELOG.md) schreiben - wie bei Feuerix mit einem **Codename** zu jeder Version
+(`**Codename „Schlauchsortierung“.**` am Anfang des ersten Punkts): ein kurzes, augenzwinkerndes Wort aus der Feuerwehrwelt, das zur Änderung passt. Nach dem Commit den Stand mit einem annotierten Git-Tag
 `vX.Y.Z` markieren (`git tag -a vX.Y.Z -m "..."`) und Tags mitpushen (`git push --tags`). Rein interne Commits brauchen keinen Eintrag.
